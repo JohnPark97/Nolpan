@@ -258,7 +258,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 child: PhysicsButton(
                   text: "TEST WIN", color: tGold, shadowColor: const Color(0xFFC9A24A),
                   onTap: () => Navigator.push(context, PageRouteBuilder(
-                    pageBuilder: (c, a1, a2) => VictoryScreen(), // THE FIX: Removed 'const'
+                    pageBuilder: (c, a1, a2) => VictoryScreen(),
                     transitionsBuilder: (c, anim, a2, child) => FadeTransition(opacity: anim, child: SlideTransition(position: Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(anim), child: child)),
                     transitionDuration: const Duration(milliseconds: 300),
                   )),
@@ -267,24 +267,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ],
           )
         ],
-      ),
-    );
-  }
-
-  // THE FIX: ADDED MISSING BUILD METHOD!
-  @override
-  Widget build(BuildContext context) {
-    String myName = socketService.playerName ?? "Player";
-    return Scaffold(
-      backgroundColor: tBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(flex: 3, child: _buildOpponentZone(myName)),
-            Expanded(flex: 3, child: _buildMarketZone()),
-            Expanded(flex: 4, child: _buildPlayerZone(myName)),
-          ],
-        ),
       ),
     );
   }
