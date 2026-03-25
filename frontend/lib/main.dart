@@ -4,12 +4,14 @@ import 'screens/welcome.dart';
 
 final socketService = SocketService();
 
+// STRICT DESIGN TOKENS (tIce officially included!)
 const Color tBg = Color(0xFFF9F7F3);
 const Color tSurface = Color(0xFFFFFFFF);
 const Color tTeal = Color(0xFF2A9D8F);
 const Color tTerra = Color(0xFFE76F51);
 const Color tInk = Color(0xFF2B2D42);
 const Color tGold = Color(0xFFE9C46A);
+const Color tIce = Color(0xFFE0E5EC); // <-- THE MISSING TOKEN
 
 void main() {
   runApp(const MaterialApp(
