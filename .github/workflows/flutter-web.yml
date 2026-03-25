@@ -5,11 +5,14 @@ on:
     branches: [ "master", "main" ]
 
 permissions:
-  contents: write # Allows GitHub to publish the website
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend # <--- CRITICAL: Tells GitHub to use the frontend folder!
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -19,8 +22,6 @@ jobs:
         with:
           channel: 'stable'
 
-      # THE MAGIC COMMAND: This tells Flutter to automatically generate 
-      # the missing android/, ios/, and web/ boilerplate folders!
       - name: Repair Project Folders
         run: flutter create .
 
@@ -31,4 +32,4 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build/web
+          publish_dir: ./frontend/build/web # <--- Publish from the correct output folder
