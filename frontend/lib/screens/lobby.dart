@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../main.dart';
-import 'game.dart'; // Import the new game screen!
+import 'game.dart';
 
 class LobbyScreen extends StatefulWidget {
   const LobbyScreen({super.key});
@@ -17,6 +17,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
   @override
   void initState() {
     super.initState();
+    
+    // THE FIX: Read from memory cache immediately so UI doesn't hang!
+    if (socketService.lastRoomUpdate != null) {
+      roomCode = socketService.lastRoomUpdate!['payload']['code'];
+      players = List<String>.from(socketService.lastRoomUpdate!['payload']['players']);
+    }
+
     _sub = socketService.stream.listen((message) {
       if (message['type'] == 'ROOM_UPDATE') {
         setState(() {
@@ -24,8 +31,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
           players = List<String>.from(message['payload']['players']);
         });
       }
-      
-      // --- NEW: TELEPORT TO GAME SCREEN ---
       if (message['type'] == 'GAME_STARTED') {
         Navigator.pushReplacement(context, MaterialPageRoute(
           builder: (_) => GameScreen(initialState: message['payload'])
@@ -40,6 +45,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF9F7F3),
       body: SafeArea(
         child: Column(
           children: [
@@ -70,7 +76,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: ElevatedButton(
-                // --- NEW: SEND START GAME EVENT ---
                 onPressed: players.length >= 2 ? () {
                   socketService.send('START_GAME', {'code': roomCode});
                 } : null,
