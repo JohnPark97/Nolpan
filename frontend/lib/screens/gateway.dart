@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../main.dart';
 import 'lobby.dart';
 
@@ -12,6 +13,7 @@ class _GatewayScreenState extends State<GatewayScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _codeController = TextEditingController();
   bool _isConnecting = false;
+  StreamSubscription? _sub;
 
   void _handleAction(bool isCreate) {
     if (_nameController.text.trim().isEmpty) return;
@@ -20,7 +22,35 @@ class _GatewayScreenState extends State<GatewayScreen> {
     setState(() { _isConnecting = true; });
     socketService.connect('wss://nolpan.onrender.com/ws');
 
-    Future.delayed(const Duration(milliseconds: 1500), () {
+    // Wait a brief moment for connection to establish
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      
+      // Listen for Success OR Error from the server
+      _sub?.cancel();
+      _sub = socketService.stream.listen((msg) {
+        if (msg['type'] == 'ROOM_UPDATE') {
+          _sub?.cancel();
+          if (mounted) {
+            setState(() { _isConnecting = false; });
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const LobbyScreen()));
+          }
+        } else if (msg['type'] == 'ERROR') {
+          _sub?.cancel();
+          if (mounted) {
+            setState(() { _isConnecting = false; });
+            // Show the error message from the Go server
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(msg['payload'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                backgroundColor: Colors.redAccent,
+                behavior: SnackBarBehavior.floating,
+              )
+            );
+          }
+        }
+      });
+
+      // Send the request
       if (isCreate) {
         socketService.send('CREATE_ROOM', {'name': _nameController.text.trim()});
       } else {
@@ -29,11 +59,13 @@ class _GatewayScreenState extends State<GatewayScreen> {
           'code': _codeController.text.trim().toUpperCase()
         });
       }
-      if (mounted) {
-        setState(() { _isConnecting = false; });
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const LobbyScreen()));
-      }
     });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -53,7 +85,7 @@ class _GatewayScreenState extends State<GatewayScreen> {
               ElevatedButton(
                 onPressed: _isConnecting ? null : () => _handleAction(true),
                 style: _btnStyle(const Color(0xFF2A9D8F)),
-                child: _isConnecting ? _loader() : const Text("CREATE NEW ROOM"),
+                child: _isConnecting ? _loader() : const Text("CREATE NEW ROOM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
               ),
               const SizedBox(height: 24),
               const Text("OR JOIN EXISTING", style: TextStyle(fontSize: 10, color: Colors.grey, letterSpacing: 2)),
@@ -67,7 +99,7 @@ class _GatewayScreenState extends State<GatewayScreen> {
                   side: const BorderSide(color: Color(0xFF2A9D8F), width: 2),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text("JOIN ROOM", style: TextStyle(color: Color(0xFF2A9D8F), fontWeight: FontWeight.bold)),
+                child: const Text("JOIN ROOM", style: TextStyle(color: Color(0xFF2A9D8F), fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ],
           ),
@@ -81,6 +113,7 @@ class _GatewayScreenState extends State<GatewayScreen> {
       controller: ctrl,
       textAlign: TextAlign.center,
       maxLength: isCode ? 4 : 12,
+      textCapitalization: isCode ? TextCapitalization.characters : TextCapitalization.words,
       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: isCode ? 8 : 0),
       decoration: InputDecoration(
         hintText: label,
