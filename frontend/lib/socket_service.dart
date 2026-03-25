@@ -10,9 +10,12 @@ class SocketService {
   String? _currentUrl;
   int _retryAttempts = 0;
   bool _isDisposed = false;
-  
-  // THE FIX: Cache the last known room state to prevent loading race conditions
   Map<String, dynamic>? lastRoomUpdate;
+  Timer? _heartbeat;
+  
+  // THE FIX: Store Session Data
+  String? playerName;
+  String? currentRoomCode;
 
   Stream<Map<String, dynamic>> get stream => _controller.stream;
 
@@ -27,19 +30,29 @@ class SocketService {
     if (_currentUrl == null || _isDisposed) return;
     try {
       _channel = WebSocketChannel.connect(Uri.parse(_currentUrl!));
+      
+      // THE FIX: If we lost connection, automatically ask the server for our session back!
+      if (playerName != null && currentRoomCode != null) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          send('RECONNECT', {'name': playerName, 'code': currentRoomCode});
+        });
+      }
+
+      _heartbeat?.cancel();
+      _heartbeat = Timer.periodic(const Duration(seconds: 10), (timer) {
+        send('PING', {});
+      });
+
       _channel!.stream.listen(
         (message) {
           _retryAttempts = 0;
           final decoded = jsonDecode(message);
-          if (decoded['payload'] is String) {
-            decoded['payload'] = jsonDecode(decoded['payload']);
-          }
+          if (decoded['payload'] is String) { decoded['payload'] = jsonDecode(decoded['payload']); }
           
-          // Cache the state before broadcasting
-          if (decoded['type'] == 'ROOM_UPDATE') {
-            lastRoomUpdate = decoded;
+          if (decoded['type'] == 'ROOM_UPDATE') { 
+            lastRoomUpdate = decoded; 
+            currentRoomCode = decoded['payload']['code']; // Save for reconnect
           }
-          
           _controller.add(decoded);
         },
         onDone: _handleDisconnect,
@@ -52,19 +65,25 @@ class SocketService {
 
   void _handleDisconnect() {
     if (_isDisposed) return;
+    _heartbeat?.cancel();
     final delay = min(pow(2, _retryAttempts).toInt(), 30);
     _retryAttempts++;
     Timer(Duration(seconds: delay), _establishConnection);
   }
 
   void send(String type, Map<String, dynamic> payload) {
-    if (_channel != null) {
-      _channel!.sink.add(jsonEncode({"type": type, "payload": payload}));
+    try {
+      if (_channel != null) {
+        _channel!.sink.add(jsonEncode({"type": type, "payload": payload}));
+      }
+    } catch (e) {
+      _handleDisconnect(); 
     }
   }
 
   void dispose() {
     _isDisposed = true;
+    _heartbeat?.cancel();
     _controller.close();
     _channel?.sink.close();
   }
