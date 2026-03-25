@@ -18,7 +18,6 @@ class _GatewayScreenState extends State<GatewayScreen> {
   @override
   void initState() {
     super.initState();
-    // Dynamic State Logic: Rebuild action dock when typing in the code box
     _codeController.addListener(() => setState(() {}));
   }
 
@@ -67,19 +66,12 @@ class _GatewayScreenState extends State<GatewayScreen> {
 
   Widget _buildInput(String hint, TextEditingController ctrl, {bool isCode = false}) {
     return Container(
-      decoration: BoxDecoration(
-        boxShadow: [BoxShadow(color: tInk.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
-      ),
+      decoration: BoxDecoration(boxShadow: [BoxShadow(color: tInk.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]),
       child: TextField(
-        controller: ctrl,
-        maxLength: isCode ? 4 : 12,
-        textCapitalization: isCode ? TextCapitalization.characters : TextCapitalization.words,
+        controller: ctrl, maxLength: isCode ? 4 : 12, textCapitalization: isCode ? TextCapitalization.characters : TextCapitalization.words,
         style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 18),
         decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: tInk.withOpacity(0.3)),
-          counterText: "",
-          filled: true, fillColor: tSurface,
+          hintText: hint, hintStyle: TextStyle(color: tInk.withOpacity(0.3)), counterText: "", filled: true, fillColor: tSurface,
           contentPadding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: tInk.withOpacity(0.1))),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: tInk.withOpacity(0.1))),
@@ -92,24 +84,14 @@ class _GatewayScreenState extends State<GatewayScreen> {
   @override
   Widget build(BuildContext context) {
     bool isCreate = _codeController.text.trim().isEmpty;
-
     return Scaffold(
       backgroundColor: tBg,
-      resizeToAvoidBottomInset: true, // Prevents keyboard from covering the Action Dock
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // TOP BAR (flex: none)
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Text("<- Back", style: TextStyle(fontWeight: FontWeight.w500, color: tInk.withOpacity(0.7), fontSize: 16)),
-              ),
-            ),
-            
-            // THE FORM (flex: 1)
+            Padding(padding: const EdgeInsets.all(24.0), child: GestureDetector(onTap: () => Navigator.pop(context), child: Text("<- Back", style: TextStyle(fontWeight: FontWeight.w500, color: tInk.withOpacity(0.7), fontSize: 16)))),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -129,15 +111,11 @@ class _GatewayScreenState extends State<GatewayScreen> {
                 ),
               ),
             ),
-            
-            // THE SMART ACTION DOCK (flex: none)
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: PhysicsButton(
                 text: _isConnecting ? "Connecting..." : (isCreate ? "Create New Room" : "Join Room"),
-                color: tTeal,
-                shadowColor: const Color(0xFF1A695F),
-                onTap: _isConnecting ? () {} : _handleAction,
+                color: tTeal, shadowColor: const Color(0xFF1A695F), onTap: _isConnecting ? () {} : _handleAction,
               ),
             )
           ],
