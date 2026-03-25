@@ -11,10 +11,18 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type PlayerBoard struct {
+	Score        int        `json:"score"`
+	PatternLines [][]string `json:"pattern_lines"`
+	Wall         [][]string `json:"wall"`
+	FloorLine    []string   `json:"floor_line"`
+}
+
 type GameState struct {
-	Factories [][]string `json:"factories"`
-	Center    []string   `json:"center"`
-	Turn      int        `json:"turn"`
+	Factories  [][]string              `json:"factories"`
+	Center     []string                `json:"center"`
+	TurnPlayer string                  `json:"turn_player"` // NEW: Explicit turn tracking
+	Boards     map[string]*PlayerBoard `json:"boards"`
 }
 
 type Room struct {
@@ -64,17 +72,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.mu.Unlock()
 
 				if isEmpty {
-					log.Printf("[GC] Room %s empty. Waiting 2 minutes before deletion.", currentRoomCode)
-					// THE FIX: 2 Minute Grace Period for solo testing!
 					go func(code string) {
 						time.Sleep(2 * time.Minute)
 						roomsMu.Lock()
 						if r, stillExists := rooms[code]; stillExists {
 							r.mu.Lock()
-							if len(r.Players) == 0 {
-								delete(rooms, code)
-								log.Printf("[GC] Room %s permanently deleted.", code)
-							}
+							if len(r.Players) == 0 { delete(rooms, code) }
 							r.mu.Unlock()
 						}
 						roomsMu.Unlock()
@@ -97,29 +100,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		roomsMu.Lock()
 		
-		// THE FIX: RECONNECT LOGIC
 		if msg.Type == "RECONNECT" {
-			var p struct {
-				Name string `json:"name"`
-				Code string `json:"code"`
-			}
+			var p struct { Name string `json:"name"`; Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
-			
 			if room, exists := rooms[p.Code]; exists {
-				currentRoomCode = p.Code
-				currentName = p.Name
-				
-				// Ensure player is in the list
-				playerExists := false
-				for _, player := range room.Players {
-					if player == p.Name { playerExists = true }
-				}
-				if !playerExists { room.Players = append(room.Players, p.Name) }
-				
+				currentRoomCode = p.Code; currentName = p.Name
 				room.Clients[ws] = p.Name
-				log.Printf("-> RECOVERED SESSION: %s in Room %s", p.Name, p.Code)
-				
-				// If game started, secretly send this player the board state to catch up
 				if room.State != nil {
 					data, _ := json.Marshal(map[string]interface{}{"type": "GAME_STARTED", "payload": room.State})
 					ws.WriteMessage(websocket.TextMessage, data)
@@ -132,28 +118,20 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			var p struct{ Name string `json:"name"` }
 			json.Unmarshal(msg.Payload, &p)
 			code := generateCode()
-			currentRoomCode = code
-			currentName = p.Name
+			currentRoomCode = code; currentName = p.Name
 			rooms[code] = &Room{Code: code, Players: []string{p.Name}, Clients: make(map[*websocket.Conn]string)}
 			rooms[code].Clients[ws] = p.Name
 			broadcastRoom(rooms[code])
 		}
 
 		if msg.Type == "JOIN_ROOM" {
-			var p struct {
-				Name string `json:"name"`
-				Code string `json:"code"`
-			}
+			var p struct { Name string `json:"name"`; Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
 			if room, exists := rooms[p.Code]; exists {
-				currentRoomCode = p.Code
-				currentName = p.Name
+				currentRoomCode = p.Code; currentName = p.Name
 				room.Players = append(room.Players, p.Name)
 				room.Clients[ws] = p.Name
 				broadcastRoom(room)
-			} else {
-				errData, _ := json.Marshal(map[string]interface{}{"type": "ERROR", "payload": "Room " + p.Code + " does not exist."})
-				ws.WriteMessage(websocket.TextMessage, errData)
 			}
 		}
 
@@ -161,7 +139,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			var p struct{ Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
 			if room, ok := rooms[p.Code]; ok {
-				room.State = generateInitialState()
+				room.State = generateInitialState(room.Players)
 				broadcastMessage(room, "GAME_STARTED", room.State)
 			}
 		}
@@ -174,7 +152,7 @@ func generateCode() string {
 	return string([]byte{l[rand.Intn(26)], l[rand.Intn(26)], l[rand.Intn(26)], l[rand.Intn(26)]})
 }
 
-func generateInitialState() *GameState {
+func generateInitialState(players []string) *GameState {
 	colors := []string{"blue", "yellow", "red", "black", "white"}
 	factories := make([][]string, 5)
 	for i := 0; i < 5; i++ {
@@ -182,16 +160,40 @@ func generateInitialState() *GameState {
 		for j := 0; j < 4; j++ { tileGroup = append(tileGroup, colors[rand.Intn(len(colors))]) }
 		factories[i] = tileGroup
 	}
-	return &GameState{Factories: factories, Center: []string{}, Turn: 0}
+
+	boards := make(map[string]*PlayerBoard)
+	for _, pName := range players {
+		pattern := make([][]string, 5)
+		for i := 0; i < 5; i++ {
+			pattern[i] = make([]string, i+1)
+			for j := 0; j <= i; j++ { pattern[i][j] = "" }
+		}
+		wall := make([][]string, 5)
+		for i := 0; i < 5; i++ {
+			wall[i] = make([]string, 5)
+			for j := 0; j < 5; j++ { wall[i][j] = "" }
+		}
+		boards[pName] = &PlayerBoard{Score: 0, PatternLines: pattern, Wall: wall, FloorLine: []string{}}
+	}
+
+	return &GameState{
+		Factories:  factories,
+		Center:     []string{},
+		TurnPlayer: players[0], // Set first player as turn starter
+		Boards:     boards,
+	}
 }
 
 func broadcastRoom(r *Room) {
-	broadcastMessage(r, "ROOM_UPDATE", map[string]interface{}{"code": r.Code, "players": r.Players})
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	data, _ := json.Marshal(map[string]interface{}{"type": "ROOM_UPDATE", "payload": map[string]interface{}{"code": r.Code, "players": r.Players}})
+	for client := range r.Clients { client.WriteMessage(websocket.TextMessage, data) }
 }
 
 func broadcastMessage(r *Room, t string, p interface{}) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	data, _ := json.Marshal(map[string]interface{}{"type": t, "payload": p})
-	for client := range r.Clients {
-		client.WriteMessage(websocket.TextMessage, data)
-	}
+	for client := range r.Clients { client.WriteMessage(websocket.TextMessage, data) }
 }
