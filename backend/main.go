@@ -48,23 +48,30 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		if msg.Type == "CREATE_ROOM" {
 			var p struct{ Name string `json:"name"` }
 			json.Unmarshal(msg.Payload, &p)
-
 			code := ""
 			const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 			for i := 0; i < 4; i++ { code += string(letters[rand.Intn(len(letters))]) }
-
-			room := &Room{
-				Code:    code,
-				Players: []string{p.Name},
-				Clients: make(map[*websocket.Conn]string),
-			}
+			room := &Room{Code: code, Players: []string{p.Name}, Clients: make(map[*websocket.Conn]string)}
 			room.Clients[ws] = p.Name
-			
 			roomsMu.Lock()
 			rooms[code] = room
 			roomsMu.Unlock()
-
 			broadcastRoom(room)
+		}
+
+		if msg.Type == "JOIN_ROOM" {
+			var p struct{ Name string `json:"name"; Code string `json:"code"` }
+			json.Unmarshal(msg.Payload, &p)
+			roomsMu.RLock()
+			room, exists := rooms[p.Code]
+			roomsMu.RUnlock()
+			if exists {
+				room.mu.Lock()
+				room.Players = append(room.Players, p.Name)
+				room.Clients[ws] = p.Name
+				room.mu.Unlock()
+				broadcastRoom(room)
+			}
 		}
 	}
 }
@@ -74,10 +81,7 @@ func broadcastRoom(r *Room) {
 	defer r.mu.RUnlock()
 	data, _ := json.Marshal(map[string]interface{}{
 		"type": "ROOM_UPDATE",
-		"payload": map[string]interface{}{
-			"code":    r.Code,
-			"players": r.Players,
-		},
+		"payload": map[string]interface{}{"code": r.Code, "players": r.Players},
 	})
 	for client := range r.Clients {
 		client.WriteMessage(websocket.TextMessage, data)
