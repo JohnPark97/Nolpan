@@ -20,12 +20,12 @@ class _GatewayScreenState extends State<GatewayScreen> {
     if (!isCreate && _codeController.text.trim().length != 4) return;
 
     setState(() { _isConnecting = true; });
+    
+    // THE FIX: Save the name in memory before connecting
+    socketService.playerName = _nameController.text.trim();
     socketService.connect('wss://nolpan.onrender.com/ws');
 
-    // Wait a brief moment for connection to establish
     Future.delayed(const Duration(milliseconds: 1000), () {
-      
-      // Listen for Success OR Error from the server
       _sub?.cancel();
       _sub = socketService.stream.listen((msg) {
         if (msg['type'] == 'ROOM_UPDATE') {
@@ -38,7 +38,6 @@ class _GatewayScreenState extends State<GatewayScreen> {
           _sub?.cancel();
           if (mounted) {
             setState(() { _isConnecting = false; });
-            // Show the error message from the Go server
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(msg['payload'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -50,7 +49,6 @@ class _GatewayScreenState extends State<GatewayScreen> {
         }
       });
 
-      // Send the request
       if (isCreate) {
         socketService.send('CREATE_ROOM', {'name': _nameController.text.trim()});
       } else {
