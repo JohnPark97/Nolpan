@@ -69,8 +69,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg.Type == "JOIN_ROOM" {
-			var p struct{ Name string `json:"name"; Code string `json:"code"` }
+			// THE FIX: Properly formatted Go Struct to prevent compile errors
+			var p struct {
+				Name string `json:"name"`
+				Code string `json:"code"`
+			}
 			json.Unmarshal(msg.Payload, &p)
+			
 			if room, ok := rooms[p.Code]; ok {
 				room.Players = append(room.Players, p.Name)
 				room.Clients[ws] = p.Name
@@ -78,7 +83,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// --- NEW: START GAME LOGIC ---
 		if msg.Type == "START_GAME" {
 			var p struct{ Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
@@ -96,13 +100,12 @@ func generateCode() string {
 	return string([]byte{l[rand.Intn(26)], l[rand.Intn(26)], l[rand.Intn(26)], l[rand.Intn(26)]})
 }
 
-// --- NEW: FACTORY GENERATION ---
 func generateInitialState() *GameState {
 	colors := []string{"blue", "yellow", "red", "black", "white"}
-	factories := make([][]string, 5) // 5 factories for a 2-player game
+	factories := make([][]string, 5) 
 	for i := 0; i < 5; i++ {
 		tileGroup := []string{}
-		for j := 0; j < 4; j++ { // 4 tiles per factory
+		for j := 0; j < 4; j++ { 
 			tileGroup = append(tileGroup, colors[rand.Intn(len(colors))])
 		}
 		factories[i] = tileGroup
