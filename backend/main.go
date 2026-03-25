@@ -55,7 +55,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			if room, ok := rooms[currentRoomCode]; ok {
 				room.mu.Lock()
 				delete(room.Clients, ws)
-				
 				var newPlayers []string
 				for _, p := range room.Players {
 					if p != currentName { newPlayers = append(newPlayers, p) }
@@ -84,54 +83,48 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		roomsMu.Lock()
 		if msg.Type == "CREATE_ROOM" {
-			// PROPER STRUCT FORMATTING
-			var p struct {
-				Name string `json:"name"`
-			}
+			var p struct{ Name string `json:"name"` }
 			json.Unmarshal(msg.Payload, &p)
 			code := generateCode()
-			
 			currentRoomCode = code
 			currentName = p.Name
-			
 			rooms[code] = &Room{Code: code, Players: []string{p.Name}, Clients: make(map[*websocket.Conn]string)}
 			rooms[code].Clients[ws] = p.Name
 			broadcastRoom(rooms[code])
 		}
 
 		if msg.Type == "JOIN_ROOM" {
-			// PROPER STRUCT FORMATTING (The Fix!)
 			var p struct {
 				Name string `json:"name"`
 				Code string `json:"code"`
 			}
 			json.Unmarshal(msg.Payload, &p)
-			
 			if room, exists := rooms[p.Code]; exists {
 				currentRoomCode = p.Code
 				currentName = p.Name
-				
 				room.Players = append(room.Players, p.Name)
 				room.Clients[ws] = p.Name
 				broadcastRoom(room)
 			} else {
-				errData, _ := json.Marshal(map[string]interface{}{
-					"type": "ERROR",
-					"payload": "Room " + p.Code + " does not exist.",
-				})
+				errData, _ := json.Marshal(map[string]interface{}{"type": "ERROR", "payload": "Room " + p.Code + " does not exist."})
 				ws.WriteMessage(websocket.TextMessage, errData)
 			}
 		}
 
 		if msg.Type == "START_GAME" {
-			// PROPER STRUCT FORMATTING
 			var p struct {
 				Code string `json:"code"`
 			}
 			json.Unmarshal(msg.Payload, &p)
+			
+			log.Printf("-> Received START_GAME for room: %s", p.Code)
+			
 			if room, ok := rooms[p.Code]; ok {
 				room.State = generateInitialState()
+				log.Printf("-> Generating Tiles... Broadcasting GAME_STARTED to %s", p.Code)
 				broadcastMessage(room, "GAME_STARTED", room.State)
+			} else {
+				log.Printf("-> ERROR: Tried to start game for missing room %s", p.Code)
 			}
 		}
 		roomsMu.Unlock()
