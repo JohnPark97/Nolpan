@@ -4,7 +4,6 @@ on:
   push:
     branches: [ "master", "main" ]
 
-# Crucial permissions for direct deployments
 permissions:
   contents: read
   pages: write
@@ -23,19 +22,14 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-
       - name: Repair Project Folders
         run: flutter create .
-
       - name: Build Web App
         run: flutter build web --release --base-href "/Nolpan/"
-
-      # Modern Method: Uploads directly to GitHub's internal servers
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -43,10 +37,10 @@ jobs:
 
   deploy:
     needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
