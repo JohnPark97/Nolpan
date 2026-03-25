@@ -48,17 +48,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	var currentRoomCode string
 	var currentName string
 
-	// THE FIX: GARBAGE COLLECTION
-	// This runs automatically the millisecond the websocket disconnects
 	defer func() {
 		ws.Close()
 		if currentRoomCode != "" {
 			roomsMu.Lock()
 			if room, ok := rooms[currentRoomCode]; ok {
 				room.mu.Lock()
-				delete(room.Clients, ws) // Remove connection
+				delete(room.Clients, ws)
 				
-				// Remove player name from list
 				var newPlayers []string
 				for _, p := range room.Players {
 					if p != currentName { newPlayers = append(newPlayers, p) }
@@ -68,10 +65,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.mu.Unlock()
 
 				if isEmpty {
-					delete(rooms, currentRoomCode) // Free the RAM!
+					delete(rooms, currentRoomCode)
 					log.Printf("Room %s garbage collected.", currentRoomCode)
 				} else {
-					go broadcastRoom(room) // Tell others they left
+					go broadcastRoom(room)
 				}
 			}
 			roomsMu.Unlock()
@@ -83,11 +80,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			Type    string          `json:"type"`
 			Payload json.RawMessage `json:"payload"`
 		}
-		if err := ws.ReadJSON(&msg); err != nil { break } // Triggers defer on error/disconnect
+		if err := ws.ReadJSON(&msg); err != nil { break }
 
 		roomsMu.Lock()
 		if msg.Type == "CREATE_ROOM" {
-			var p struct{ Name string `json:"name"` }
+			// PROPER STRUCT FORMATTING
+			var p struct {
+				Name string `json:"name"`
+			}
 			json.Unmarshal(msg.Payload, &p)
 			code := generateCode()
 			
@@ -100,7 +100,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg.Type == "JOIN_ROOM" {
-			var p struct{ Name string `json:"name"; Code string `json:"code"` }
+			// PROPER STRUCT FORMATTING (The Fix!)
+			var p struct {
+				Name string `json:"name"`
+				Code string `json:"code"`
+			}
 			json.Unmarshal(msg.Payload, &p)
 			
 			if room, exists := rooms[p.Code]; exists {
@@ -111,8 +115,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.Clients[ws] = p.Name
 				broadcastRoom(room)
 			} else {
-				// THE FIX: ERROR HANDLING
-				// Tell the client the room doesn't exist instead of ignoring them
 				errData, _ := json.Marshal(map[string]interface{}{
 					"type": "ERROR",
 					"payload": "Room " + p.Code + " does not exist.",
@@ -122,7 +124,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg.Type == "START_GAME" {
-			var p struct{ Code string `json:"code"` }
+			// PROPER STRUCT FORMATTING
+			var p struct {
+				Code string `json:"code"`
+			}
 			json.Unmarshal(msg.Payload, &p)
 			if room, ok := rooms[p.Code]; ok {
 				room.State = generateInitialState()
