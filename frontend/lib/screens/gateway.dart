@@ -10,54 +10,92 @@ class GatewayScreen extends StatefulWidget {
 
 class _GatewayScreenState extends State<GatewayScreen> {
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _codeController = TextEditingController();
+  bool _isConnecting = false;
 
-  void _createRoom() {
+  void _handleAction(bool isCreate) {
     if (_nameController.text.trim().isEmpty) return;
-    
-    // Connect to Render
+    if (!isCreate && _codeController.text.trim().length != 4) return;
+
+    setState(() { _isConnecting = true; });
     socketService.connect('wss://nolpan.onrender.com/ws');
-    
-    // Ask Go Server to make a code
-    socketService.send('CREATE_ROOM', {'name': _nameController.text.trim()});
-    
-    // Jump to Lobby screen
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const LobbyScreen()));
+
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (isCreate) {
+        socketService.send('CREATE_ROOM', {'name': _nameController.text.trim()});
+      } else {
+        socketService.send('JOIN_ROOM', {
+          'name': _nameController.text.trim(),
+          'code': _codeController.text.trim().toUpperCase()
+        });
+      }
+      if (mounted) {
+        setState(() { _isConnecting = false; });
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const LobbyScreen()));
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
+      backgroundColor: const Color(0xFFF9F7F3),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text("NOLPAN", style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Color(0xFF2A9D8F), letterSpacing: 2)),
+              const Text("NOLPAN", style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Color(0xFF2A9D8F), letterSpacing: 4)),
               const SizedBox(height: 48),
-              TextField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  hintText: "Enter your name",
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                ),
+              _buildInput("Your Name", _nameController),
+              const SizedBox(height: 16),
+              const Divider(height: 40),
+              ElevatedButton(
+                onPressed: _isConnecting ? null : () => _handleAction(true),
+                style: _btnStyle(const Color(0xFF2A9D8F)),
+                child: _isConnecting ? _loader() : const Text("CREATE NEW ROOM"),
               ),
               const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _createRoom,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2A9D8F),
+              const Text("OR JOIN EXISTING", style: TextStyle(fontSize: 10, color: Colors.grey, letterSpacing: 2)),
+              const SizedBox(height: 16),
+              _buildInput("4-Letter Code", _codeController, isCode: true),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: _isConnecting ? null : () => _handleAction(false),
+                style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 60),
+                  side: const BorderSide(color: Color(0xFF2A9D8F), width: 2),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text("Create Room", style: TextStyle(fontSize: 20, color: Colors.white)),
-              )
+                child: const Text("JOIN ROOM", style: TextStyle(color: Color(0xFF2A9D8F), fontWeight: FontWeight.bold)),
+              ),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _buildInput(String label, TextEditingController ctrl, {bool isCode = false}) {
+    return TextField(
+      controller: ctrl,
+      textAlign: TextAlign.center,
+      maxLength: isCode ? 4 : 12,
+      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: isCode ? 8 : 0),
+      decoration: InputDecoration(
+        hintText: label,
+        counterText: "",
+        filled: true, fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      ),
+    );
+  }
+
+  ButtonStyle _btnStyle(Color color) => ElevatedButton.styleFrom(
+    backgroundColor: color, minimumSize: const Size(double.infinity, 60),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    elevation: 0,
+  );
+
+  Widget _loader() => const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2));
 }
