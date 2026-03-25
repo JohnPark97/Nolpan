@@ -64,8 +64,21 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.mu.Unlock()
 
 				if isEmpty {
-					delete(rooms, currentRoomCode)
-					log.Printf("Room %s garbage collected.", currentRoomCode)
+					log.Printf("[GC] Room %s empty. Waiting 2 minutes before deletion.", currentRoomCode)
+					// THE FIX: 2 Minute Grace Period for solo testing!
+					go func(code string) {
+						time.Sleep(2 * time.Minute)
+						roomsMu.Lock()
+						if r, stillExists := rooms[code]; stillExists {
+							r.mu.Lock()
+							if len(r.Players) == 0 {
+								delete(rooms, code)
+								log.Printf("[GC] Room %s permanently deleted.", code)
+							}
+							r.mu.Unlock()
+						}
+						roomsMu.Unlock()
+					}(currentRoomCode)
 				} else {
 					go broadcastRoom(room)
 				}
@@ -80,8 +93,41 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			Payload json.RawMessage `json:"payload"`
 		}
 		if err := ws.ReadJSON(&msg); err != nil { break }
+		if msg.Type == "PING" { continue }
 
 		roomsMu.Lock()
+		
+		// THE FIX: RECONNECT LOGIC
+		if msg.Type == "RECONNECT" {
+			var p struct {
+				Name string `json:"name"`
+				Code string `json:"code"`
+			}
+			json.Unmarshal(msg.Payload, &p)
+			
+			if room, exists := rooms[p.Code]; exists {
+				currentRoomCode = p.Code
+				currentName = p.Name
+				
+				// Ensure player is in the list
+				playerExists := false
+				for _, player := range room.Players {
+					if player == p.Name { playerExists = true }
+				}
+				if !playerExists { room.Players = append(room.Players, p.Name) }
+				
+				room.Clients[ws] = p.Name
+				log.Printf("-> RECOVERED SESSION: %s in Room %s", p.Name, p.Code)
+				
+				// If game started, secretly send this player the board state to catch up
+				if room.State != nil {
+					data, _ := json.Marshal(map[string]interface{}{"type": "GAME_STARTED", "payload": room.State})
+					ws.WriteMessage(websocket.TextMessage, data)
+				}
+				broadcastRoom(room)
+			}
+		}
+
 		if msg.Type == "CREATE_ROOM" {
 			var p struct{ Name string `json:"name"` }
 			json.Unmarshal(msg.Payload, &p)
@@ -112,19 +158,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg.Type == "START_GAME" {
-			var p struct {
-				Code string `json:"code"`
-			}
+			var p struct{ Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
-			
-			log.Printf("-> Received START_GAME for room: %s", p.Code)
-			
 			if room, ok := rooms[p.Code]; ok {
 				room.State = generateInitialState()
-				log.Printf("-> Generating Tiles... Broadcasting GAME_STARTED to %s", p.Code)
 				broadcastMessage(room, "GAME_STARTED", room.State)
-			} else {
-				log.Printf("-> ERROR: Tried to start game for missing room %s", p.Code)
 			}
 		}
 		roomsMu.Unlock()
