@@ -5,32 +5,34 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 class SocketService {
   WebSocketChannel? _channel;
-  final _controller = StreamController>.broadcast();
-  
+  final _controller = StreamController<Map<String, dynamic>>.broadcast();
+
   String? _currentUrl;
   int _retryAttempts = 0;
   bool _isDisposed = false;
 
-  Stream> get stream => _controller.stream;
+  Stream<Map<String, dynamic>> get stream => _controller.stream;
 
   void connect(String url) {
+    if (_currentUrl == url && _channel != null) return;
     _currentUrl = url;
     _isDisposed = false;
     _establishConnection();
   }
 
-  // PRO HYGIENE: Exponential Backoff Reconnect Logic
   void _establishConnection() {
     if (_currentUrl == null || _isDisposed) return;
-
     try {
       _channel = WebSocketChannel.connect(Uri.parse(_currentUrl!));
-      print('Socket connecting...');
-      
       _channel!.stream.listen(
         (message) {
-          _retryAttempts = 0; // Reset backoff on success
-          _controller.add(jsonDecode(message));
+          _retryAttempts = 0; // Reset backoff
+          final decoded = jsonDecode(message);
+          // Auto-parse stringified JSON payloads (Fixes the bug from the tester!)
+          if (decoded['payload'] is String) {
+            decoded['payload'] = jsonDecode(decoded['payload']);
+          }
+          _controller.add(decoded);
         },
         onDone: _handleDisconnect,
         onError: (error) => _handleDisconnect(),
@@ -42,16 +44,12 @@ class SocketService {
 
   void _handleDisconnect() {
     if (_isDisposed) return;
-    
-    // Calculates delay: 1s, 2s, 4s, 8s, up to 30s max
     final delay = min(pow(2, _retryAttempts).toInt(), 30);
-    print('Socket dropped. Reconnecting in ${delay}s...');
-    
     _retryAttempts++;
     Timer(Duration(seconds: delay), _establishConnection);
   }
 
-  void send(String type, Map payload) {
+  void send(String type, Map<String, dynamic> payload) {
     if (_channel != null) {
       _channel!.sink.add(jsonEncode({"type": type, "payload": payload}));
     }
