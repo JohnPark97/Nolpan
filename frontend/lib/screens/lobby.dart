@@ -9,39 +9,54 @@ class LobbyScreen extends StatefulWidget {
 }
 
 class _LobbyScreenState extends State<LobbyScreen> {
-  String roomCode = "WAIT...";
+  String roomCode = "...";
+  List<String> players = [];
   late StreamSubscription _sub;
 
   @override
   void initState() {
     super.initState();
-    // Listen for Go server's response
     _sub = socketService.stream.listen((message) {
-      if (message['type'] == 'ROOM_CREATED') {
-        setState(() { roomCode = message['payload']['code']; });
+      if (message['type'] == 'ROOM_UPDATE') {
+        setState(() {
+          roomCode = message['payload']['code'];
+          players = List<String>.from(message['payload']['players']);
+        });
       }
     });
   }
 
   @override
-  void dispose() {
-    _sub.cancel(); // Prevent memory leaks when leaving screen
-    super.dispose();
-  }
+  void dispose() { _sub.cancel(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, iconTheme: const IconThemeData(color: Colors.black)),
-      body: Center(
+      body: SafeArea(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text("Gathering Room", style: TextStyle(fontSize: 20, color: Colors.grey, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 16),
-            Text(roomCode, style: const TextStyle(fontSize: 64, fontWeight: FontWeight.bold, color: Color(0xFF2A9D8F), letterSpacing: 8)),
-            const SizedBox(height: 64),
-            const CircularProgressIndicator(color: Color(0xFFE9C46A)),
+            const SizedBox(height: 40),
+            Text(roomCode, style: const TextStyle(fontSize: 72, fontWeight: FontWeight.bold, color: Color(0xFF2A9D8F), letterSpacing: 8)),
+            const Text("SHARE THIS CODE", style: TextStyle(color: Colors.grey, letterSpacing: 2)),
+            const Divider(height: 60, indent: 40, endIndent: 40),
+            Expanded(
+              child: ListView.builder(
+                itemCount: players.length,
+                itemBuilder: (context, index) => ListTile(
+                  leading: const CircleAvatar(backgroundColor: Color(0xFF2A9D8F), child: Icon(Icons.person, color: Colors.white)),
+                  title: Text(players[index], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  trailing: index == 0 ? const Chip(label: Text("HOST")) : null,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: ElevatedButton(
+                onPressed: players.length >= 2 ? () {} : null,
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE9C46A), minimumSize: const Size(double.infinity, 60)),
+                child: Text(players.length >= 2 ? "START GAME" : "WAITING FOR PLAYERS..."),
+              ),
+            )
           ],
         ),
       ),
