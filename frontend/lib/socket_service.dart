@@ -10,6 +10,9 @@ class SocketService {
   String? _currentUrl;
   int _retryAttempts = 0;
   bool _isDisposed = false;
+  
+  // THE FIX: Cache the last known room state to prevent loading race conditions
+  Map<String, dynamic>? lastRoomUpdate;
 
   Stream<Map<String, dynamic>> get stream => _controller.stream;
 
@@ -26,12 +29,17 @@ class SocketService {
       _channel = WebSocketChannel.connect(Uri.parse(_currentUrl!));
       _channel!.stream.listen(
         (message) {
-          _retryAttempts = 0; // Reset backoff
+          _retryAttempts = 0;
           final decoded = jsonDecode(message);
-          // Auto-parse stringified JSON payloads (Fixes the bug from the tester!)
           if (decoded['payload'] is String) {
             decoded['payload'] = jsonDecode(decoded['payload']);
           }
+          
+          // Cache the state before broadcasting
+          if (decoded['type'] == 'ROOM_UPDATE') {
+            lastRoomUpdate = decoded;
+          }
+          
           _controller.add(decoded);
         },
         onDone: _handleDisconnect,
