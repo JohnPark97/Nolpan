@@ -1,0 +1,1 @@
+name: Deploy Nolpan\non:\n  push:\n    branches: [ main ]\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: echo "Deployment Engine Initialized"
