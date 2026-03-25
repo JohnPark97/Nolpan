@@ -19,7 +19,6 @@ class _GameScreenState extends State<GameScreen> {
     super.initState();
     _updateState(widget.initialState);
 
-    // THE FIX: Listen to the socket stream to catch RECONNECT board updates
     _sub = socketService.stream.listen((message) {
       if (message['type'] == 'GAME_STARTED' || message['type'] == 'GAME_UPDATE') {
         if (mounted) {
@@ -80,7 +79,7 @@ class _GameScreenState extends State<GameScreen> {
                   color: Colors.white,
                   shape: BoxShape.circle,
                   border: Border.all(color: const Color(0xFFE9C46A), width: 3),
-                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))]
+                  boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 10, offset: Offset(0, 5))]
                 ),
                 child: Center(
                   child: Wrap(
@@ -92,7 +91,8 @@ class _GameScreenState extends State<GameScreen> {
                         color: _getTileColor(tile),
                         borderRadius: BorderRadius.circular(6),
                         border: tile == 'white' ? Border.all(color: Colors.grey[300]!) : null,
-                        boxShadow: const [BoxShadow(color: Colors.black24, blurRadius: 2, offset: Offset(0, 2))]
+                        // THE FIX: Raw Hex instead of Colors.black24
+                        boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 2, offset: Offset(0, 2))]
                       ),
                     )).toList(),
                   ),
@@ -107,7 +107,7 @@ class _GameScreenState extends State<GameScreen> {
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]
+              boxShadow: [BoxShadow(color: Color(0x1F000000), blurRadius: 10)]
             ),
             child: const Text(
               "Waiting for your turn...", 
