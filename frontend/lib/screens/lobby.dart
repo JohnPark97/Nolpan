@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../main.dart';
+import 'game.dart'; // Import the new game screen!
 
 class LobbyScreen extends StatefulWidget {
   const LobbyScreen({super.key});
@@ -22,6 +23,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
           roomCode = message['payload']['code'];
           players = List<String>.from(message['payload']['players']);
         });
+      }
+      
+      // --- NEW: TELEPORT TO GAME SCREEN ---
+      if (message['type'] == 'GAME_STARTED') {
+        Navigator.pushReplacement(context, MaterialPageRoute(
+          builder: (_) => GameScreen(initialState: message['payload'])
+        ));
       }
     });
   }
@@ -62,8 +70,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: ElevatedButton(
+                // --- NEW: SEND START GAME EVENT ---
                 onPressed: players.length >= 2 ? () {
-                  // TODO: Game Start Logic
+                  socketService.send('START_GAME', {'code': roomCode});
                 } : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2A9D8F),
