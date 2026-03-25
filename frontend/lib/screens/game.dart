@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import '../main.dart';
 
 class GameScreen extends StatefulWidget {
   final Map<String, dynamic> initialState;
@@ -10,13 +12,33 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late List<List<String>> factories;
+  late StreamSubscription _sub;
 
   @override
   void initState() {
     super.initState();
-    factories = (widget.initialState['factories'] as List)
+    _updateState(widget.initialState);
+
+    // THE FIX: Listen to the socket stream to catch RECONNECT board updates
+    _sub = socketService.stream.listen((message) {
+      if (message['type'] == 'GAME_STARTED' || message['type'] == 'GAME_UPDATE') {
+        if (mounted) {
+          setState(() { _updateState(message['payload']); });
+        }
+      }
+    });
+  }
+  
+  void _updateState(Map<String, dynamic> payload) {
+    factories = (payload['factories'] as List)
         .map((f) => List<String>.from(f))
         .toList();
+  }
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
   }
 
   Color _getTileColor(String name) {
