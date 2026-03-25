@@ -11,19 +11,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const (
-	TypeCreateRoom  = "CREATE_ROOM"
-	TypeRoomCreated = "ROOM_CREATED"
-)
-
-type Message struct {
-	Type    string          `json:"type"`
-	Payload json.RawMessage `json:"payload"`
-}
-
 type Room struct {
 	Code    string
-	Clients map[*websocket.Conn]bool
+	Players []string
+	Clients map[*websocket.Conn]string
 	mu      sync.RWMutex
 }
 
@@ -33,21 +24,12 @@ var (
 	roomsMu  sync.RWMutex
 )
 
-func generateRoomCode() string {
-	const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	b := make([]byte, 4)
-	for i := range b { b[i] = letters[rand.Intn(len(letters))] }
-	return string(b)
-}
-
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	http.HandleFunc("/ws", handleConnections)
-
 	port := os.Getenv("PORT")
 	if port == "" { port = "8080" }
-
-	log.Printf("Nolpan Pro Server listening on port %s", port)
+	log.Printf("Server Live on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
@@ -57,27 +39,47 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	defer ws.Close()
 
 	for {
-		var msg Message
+		var msg struct {
+			Type    string          `json:"type"`
+			Payload json.RawMessage `json:"payload"`
+		}
 		if err := ws.ReadJSON(&msg); err != nil { break }
 
-		if msg.Type == TypeCreateRoom {
-			code := generateRoomCode()
+		if msg.Type == "CREATE_ROOM" {
+			var p struct{ Name string `json:"name"` }
+			json.Unmarshal(msg.Payload, &p)
 
-			roomsMu.Lock()
-			rooms[code] = &Room{
+			code := ""
+			const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+			for i := 0; i < 4; i++ { code += string(letters[rand.Intn(len(letters))]) }
+
+			room := &Room{
 				Code:    code,
-				Clients: make(map[*websocket.Conn]bool),
+				Players: []string{p.Name},
+				Clients: make(map[*websocket.Conn]string),
 			}
-			rooms[code].Clients[ws] = true
+			room.Clients[ws] = p.Name
+			
+			roomsMu.Lock()
+			rooms[code] = room
 			roomsMu.Unlock()
 
-			resp, _ := json.Marshal(map[string]string{"code": code})
-			
-			rooms[code].mu.Lock()
-			ws.WriteJSON(Message{Type: TypeRoomCreated, Payload: resp})
-			rooms[code].mu.Unlock()
-			
-			log.Printf("Room %s created", code)
+			broadcastRoom(room)
 		}
+	}
+}
+
+func broadcastRoom(r *Room) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	data, _ := json.Marshal(map[string]interface{}{
+		"type": "ROOM_UPDATE",
+		"payload": map[string]interface{}{
+			"code":    r.Code,
+			"players": r.Players,
+		},
+	})
+	for client := range r.Clients {
+		client.WriteMessage(websocket.TextMessage, data)
 	}
 }
