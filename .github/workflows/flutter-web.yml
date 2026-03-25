@@ -1,18 +1,25 @@
-name: Flutter Web Build and Deploy
+name: Nolpan Web CI/CD
 
 on:
   push:
     branches: [ "master", "main" ]
 
+# Crucial permissions for direct deployments
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./frontend # <--- CRITICAL: Tells GitHub to use the frontend folder!
+        working-directory: ./frontend
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -28,8 +35,19 @@ jobs:
       - name: Build Web App
         run: flutter build web --release --base-href "/Nolpan/"
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      # Modern Method: Uploads directly to GitHub's internal servers
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./frontend/build/web # <--- Publish from the correct output folder
+          path: ./frontend/build/web
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
