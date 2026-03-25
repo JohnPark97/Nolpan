@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'socket_service.dart';
-import 'screens/welcome.dart'; // NEW SCREEN 1
+import 'screens/welcome.dart';
 
 final socketService = SocketService();
 
-// STRICT DESIGN TOKENS
 const Color tBg = Color(0xFFF9F7F3);
 const Color tSurface = Color(0xFFFFFFFF);
 const Color tTeal = Color(0xFF2A9D8F);
@@ -19,7 +18,6 @@ void main() {
   ));
 }
 
-// STRICT RULE 4: THE TACTILE BUTTON PHYSICS ENGINE
 class PhysicsButton extends StatefulWidget {
   final String text;
   final Color color;
@@ -49,14 +47,11 @@ class _PhysicsButtonState extends State<PhysicsButton> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        widget.onTap();
-      },
+      onTapUp: (_) { setState(() => _isPressed = false); widget.onTap(); },
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic, // The "Thoughtful Snap"
+        curve: Curves.easeOutCubic,
         margin: EdgeInsets.only(top: _isPressed ? 4 : 0, bottom: _isPressed ? 0 : 4),
         width: widget.isFullWidth ? double.infinity : null,
         height: 60,
