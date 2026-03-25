@@ -10,7 +10,6 @@ class VictoryScreen extends StatelessWidget {
     {'name': 'Sarah', 'lastScore': 58, 'wins': 1},
   ];
 
-  // THE FIX: Removed 'const' so the compiler accepts the dynamic mock data
   VictoryScreen({super.key});
 
   @override
