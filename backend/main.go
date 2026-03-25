@@ -33,12 +33,7 @@ var (
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-	
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK); w.Write([]byte("OK")) })
 	http.HandleFunc("/ws", handleConnections)
 	port := os.Getenv("PORT")
 	if port == "" { port = "8080" }
@@ -49,37 +44,80 @@ func main() {
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil { return }
-	defer ws.Close()
+	
+	var currentRoomCode string
+	var currentName string
+
+	// THE FIX: GARBAGE COLLECTION
+	// This runs automatically the millisecond the websocket disconnects
+	defer func() {
+		ws.Close()
+		if currentRoomCode != "" {
+			roomsMu.Lock()
+			if room, ok := rooms[currentRoomCode]; ok {
+				room.mu.Lock()
+				delete(room.Clients, ws) // Remove connection
+				
+				// Remove player name from list
+				var newPlayers []string
+				for _, p := range room.Players {
+					if p != currentName { newPlayers = append(newPlayers, p) }
+				}
+				room.Players = newPlayers
+				isEmpty := len(room.Players) == 0
+				room.mu.Unlock()
+
+				if isEmpty {
+					delete(rooms, currentRoomCode) // Free the RAM!
+					log.Printf("Room %s garbage collected.", currentRoomCode)
+				} else {
+					go broadcastRoom(room) // Tell others they left
+				}
+			}
+			roomsMu.Unlock()
+		}
+	}()
 
 	for {
 		var msg struct {
 			Type    string          `json:"type"`
 			Payload json.RawMessage `json:"payload"`
 		}
-		if err := ws.ReadJSON(&msg); err != nil { break }
+		if err := ws.ReadJSON(&msg); err != nil { break } // Triggers defer on error/disconnect
 
 		roomsMu.Lock()
 		if msg.Type == "CREATE_ROOM" {
 			var p struct{ Name string `json:"name"` }
 			json.Unmarshal(msg.Payload, &p)
 			code := generateCode()
+			
+			currentRoomCode = code
+			currentName = p.Name
+			
 			rooms[code] = &Room{Code: code, Players: []string{p.Name}, Clients: make(map[*websocket.Conn]string)}
 			rooms[code].Clients[ws] = p.Name
 			broadcastRoom(rooms[code])
 		}
 
 		if msg.Type == "JOIN_ROOM" {
-			// THE FIX: Properly formatted Go Struct to prevent compile errors
-			var p struct {
-				Name string `json:"name"`
-				Code string `json:"code"`
-			}
+			var p struct{ Name string `json:"name"; Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
 			
-			if room, ok := rooms[p.Code]; ok {
+			if room, exists := rooms[p.Code]; exists {
+				currentRoomCode = p.Code
+				currentName = p.Name
+				
 				room.Players = append(room.Players, p.Name)
 				room.Clients[ws] = p.Name
 				broadcastRoom(room)
+			} else {
+				// THE FIX: ERROR HANDLING
+				// Tell the client the room doesn't exist instead of ignoring them
+				errData, _ := json.Marshal(map[string]interface{}{
+					"type": "ERROR",
+					"payload": "Room " + p.Code + " does not exist.",
+				})
+				ws.WriteMessage(websocket.TextMessage, errData)
 			}
 		}
 
@@ -102,12 +140,10 @@ func generateCode() string {
 
 func generateInitialState() *GameState {
 	colors := []string{"blue", "yellow", "red", "black", "white"}
-	factories := make([][]string, 5) 
+	factories := make([][]string, 5)
 	for i := 0; i < 5; i++ {
 		tileGroup := []string{}
-		for j := 0; j < 4; j++ { 
-			tileGroup = append(tileGroup, colors[rand.Intn(len(colors))])
-		}
+		for j := 0; j < 4; j++ { tileGroup = append(tileGroup, colors[rand.Intn(len(colors))]) }
 		factories[i] = tileGroup
 	}
 	return &GameState{Factories: factories, Center: []string{}, Turn: 0}
