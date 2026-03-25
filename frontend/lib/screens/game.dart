@@ -1,15 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:async';
 import '../main.dart';
 import 'victory.dart';
-
-const List<List<String>> wallPattern = [
-  ['blue', 'yellow', 'red', 'black', 'white'],
-  ['white', 'blue', 'yellow', 'red', 'black'],
-  ['black', 'white', 'blue', 'yellow', 'red'],
-  ['red', 'black', 'white', 'blue', 'yellow'],
-  ['yellow', 'red', 'black', 'white', 'blue'],
-];
 
 class GameScreen extends StatefulWidget {
   final Map<String, dynamic> initialState;
@@ -22,10 +15,14 @@ class _GameScreenState extends State<GameScreen> {
   late List<List<String>> factories;
   late List<String> center;
   late Map<String, dynamic> boards;
+  late String turnPlayer;
   late StreamSubscription _sub;
-  
-  String? selectedColor;
-  int? selectedKiln;
+
+  // INTERACTION STATE
+  String? heldColor;
+  int? heldCount;
+  int? sourceKilnIdx; // -1 for Center Pool
+  int? hoveredRow;
 
   @override
   void initState() {
@@ -42,142 +39,228 @@ class _GameScreenState extends State<GameScreen> {
     factories = (payload['factories'] as List).map((f) => List<String>.from(f)).toList();
     center = List<String>.from(payload['center'] ?? []);
     boards = Map<String, dynamic>.from(payload['boards'] ?? {});
+    turnPlayer = payload['turn_player'] ?? boards.keys.first;
+    
+    // Reset interaction on new turn
+    heldColor = null; heldCount = null; sourceKilnIdx = null; hoveredRow = null;
   }
 
   @override
   void dispose() { _sub.cancel(); super.dispose(); }
 
-  // --- COMPONENT: TACTILE TILE ---
-  Widget _buildPhysicsTile(String colorName, {bool empty = false, bool isGhost = false, bool isSelected = false, VoidCallback? onTap}) {
-    Color bg; IconData? icon; Color shadow = Colors.transparent;
+  // --- LOGIC: IS MOVE LEGAL? ---
+  bool _isRowLegal(int rowIdx, String color) {
+    String myName = socketService.playerName ?? "";
+    Map<String, dynamic> myBoard = boards[myName] ?? {};
+    List wall = myBoard['wall'] ?? [];
+    List patternLines = myBoard['pattern_lines'] ?? [];
+
+    // 1. Is the color already on the wall for this row?
+    for (int col = 0; col < 5; col++) {
+      if (wall[rowIdx][col] == color) return false;
+    }
+    // 2. Is the row already occupied by a different color?
+    List rowTiles = patternLines[rowIdx];
+    for (var t in rowTiles) {
+      if (t != "" && t != color) return false;
+    }
+    return true;
+  }
+
+  // --- ACTIONS ---
+  void _selectFromKiln(int kilnIdx, String color) {
+    HapticFeedback.lightImpact();
+    setState(() {
+      heldColor = color;
+      sourceKilnIdx = kilnIdx;
+      heldCount = factories[kilnIdx].where((t) => t == color).length;
+    });
+  }
+
+  void _selectFromCenter(String color) {
+    HapticFeedback.lightImpact();
+    setState(() {
+      heldColor = color;
+      sourceKilnIdx = -1;
+      heldCount = center.where((t) => t == color).length;
+    });
+  }
+
+  // --- UI COMPONENTS ---
+  Widget _buildTile(String colorName, {double opacity = 1.0, bool isGhost = false, double scale = 1.0}) {
+    Color bg; IconData? icon;
     switch (colorName) {
-      case 'blue': bg = tTeal; icon = Icons.star; shadow = const Color(0xFF1A695F); break;
-      case 'red': bg = tTerra; icon = Icons.menu; shadow = const Color(0xFFA84128); break;
-      case 'yellow': bg = tGold; icon = Icons.circle; shadow = const Color(0xFFC9A24A); break;
-      case 'black': bg = tInk; icon = Icons.close; shadow = const Color(0xFF11121A); break;
-      case 'white': bg = tIce; icon = Icons.square_outlined; shadow = Colors.grey[300]!; break;
+      case 'blue': bg = tTeal; icon = Icons.star; break;
+      case 'red': bg = tTerra; icon = Icons.menu; break;
+      case 'yellow': bg = tGold; icon = Icons.circle; break;
+      case 'black': bg = tInk; icon = Icons.close; break;
+      case 'white': bg = tIce; icon = Icons.square_outlined; break;
       default: bg = Colors.transparent;
     }
-
-    Widget tile = Container(
-      width: 22, height: 22, margin: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: isGhost ? bg.withOpacity(0.1) : bg,
-        borderRadius: BorderRadius.circular(4),
-        border: isSelected ? Border.all(color: tInk, width: 2) : (isGhost ? Border.all(color: bg.withOpacity(0.2)) : null),
-        boxShadow: (isGhost || empty) ? [] : [BoxShadow(color: shadow, offset: const Offset(0, 2))],
+    
+    return Transform.scale(
+      scale: scale,
+      child: Opacity(
+        opacity: isGhost ? 0.3 : opacity,
+        child: Container(
+          width: 22, height: 22, margin: const EdgeInsets.all(1.5),
+          decoration: BoxDecoration(
+            color: bg, borderRadius: BorderRadius.circular(4),
+            border: colorName == 'white' ? Border.all(color: Colors.grey[300]!) : null,
+            boxShadow: opacity == 1.0 ? [const BoxShadow(color: Colors.black12, offset: Offset(0, 2))] : [],
+          ),
+          child: Center(child: Icon(icon, size: 10, color: (colorName == 'white' ? Colors.grey : Colors.white).withOpacity(0.5))),
+        ),
       ),
-      child: empty ? null : Center(child: Icon(icon, size: 10, color: Colors.white.withOpacity(0.5))),
     );
-
-    return onTap != null ? GestureDetector(onTap: onTap, child: tile) : tile;
   }
 
   @override
   Widget build(BuildContext context) {
     String myName = socketService.playerName ?? "Player";
+    bool isMyTurn = turnPlayer == myName;
     Map<String, dynamic> myBoard = boards[myName] ?? {};
-    List patternLines = myBoard['pattern_lines'] ?? [];
-    List wall = myBoard['wall'] ?? [];
-    List floor = myBoard['floor_line'] ?? [];
-    List<String> opponents = boards.keys.where((k) => k != myName).toList();
+    List patternLines = myBoard['pattern_lines'] ?? List.generate(5, (i) => List.filled(i + 1, ""));
+    List wall = myBoard['wall'] ?? List.generate(5, (_) => List.filled(5, ""));
 
     return Scaffold(
       backgroundColor: tBg,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // ZONE 1: OPPONENTS (flex: 3)
-            Expanded(flex: 3, child: Container(
-              width: double.infinity, margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-              child: opponents.isEmpty 
-                ? const Center(child: Text("WAITING FOR OPPONENTS...", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)))
-                : ListView(children: opponents.map((opp) {
-                    var oppBoard = boards[opp];
-                    return Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [
-                      CircleAvatar(radius: 12, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 10, color: Colors.white))),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(opp, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                      Column(children: List.generate(5, (r) => Row(children: List.generate(5, (c) => Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4, decoration: BoxDecoration(color: (oppBoard['wall'] != null && oppBoard['wall'][r][c] != "") ? tTeal : Colors.grey[200])))))),
-                      const SizedBox(width: 12),
-                      Text("${oppBoard['score']}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    ]));
-                  }).toList()),
-            )),
-
-            // ZONE 2: MARKET (flex: 3)
-            Expanded(flex: 3, child: Column(
+            Column(
               children: [
-                Wrap(
-                  alignment: WrapAlignment.center, spacing: 12, runSpacing: 12,
-                  children: List.generate(factories.length, (kilnIdx) => Container(
-                    width: 60, height: 60,
-                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                    child: Center(child: Wrap(children: factories[kilnIdx].map((tileColor) => _buildPhysicsTile(
-                      tileColor, 
-                      isSelected: selectedKiln == kilnIdx && selectedColor == tileColor,
-                      onTap: () => setState(() { selectedKiln = kilnIdx; selectedColor = tileColor; }),
-                    )).toList())),
-                  )),
-                ),
-                const SizedBox(height: 12),
-                // Center Pool
-                Container(
-                  height: 36, width: 200, decoration: BoxDecoration(color: Colors.black.withOpacity(0.05), borderRadius: BorderRadius.circular(18)),
-                  child: Center(child: center.isEmpty ? const Text("CENTER", style: TextStyle(fontSize: 10, color: Colors.grey)) : Wrap(children: center.map((t) => _buildPhysicsTile(t)).toList())),
-                )
-              ],
-            )),
-
-            // ZONE 3: WORKSHOP (flex: 4)
-            Expanded(flex: 4, child: Container(
-              color: Colors.white, padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text("MY WORKSHOP", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                    IconButton(icon: const Icon(Icons.emoji_events_outlined, color: tGold, size: 18), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VictoryScreen()))),
-                    Text("SCORE: ${myBoard['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tTeal)),
-                  ]),
-                  // STAIRCASE AND WALL GRID
-                  Expanded(child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                // HEADER
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Pattern Lines
-                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: List.generate(5, (r) => Row(children: List.generate(r + 1, (c) {
-                        String t = (patternLines.length > r && patternLines[r].length > c) ? patternLines[r][c] : "";
-                        return _buildPhysicsTile(t, empty: t == "");
-                      } )))),
-                      const SizedBox(width: 20),
-                      // Wall
-                      Column(children: List.generate(5, (r) => Row(children: List.generate(5, (c) {
-                        String t = (wall.length > r && wall[r].length > c) ? wall[r][c] : "";
-                        return t != "" ? _buildPhysicsTile(t) : _buildPhysicsTile(wallPattern[r][c], isGhost: true);
-                      } )))),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(isMyTurn ? "YOUR TURN" : "WAITING FOR $turnPlayer...", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: isMyTurn ? tTeal : Colors.grey, letterSpacing: 2)),
+                          const SizedBox(height: 4),
+                          Text("MOSAIC ROUND 1", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: tInk.withOpacity(0.8))),
+                        ],
+                      ),
+                      IconButton(icon: const Icon(Icons.emoji_events_outlined, color: tGold), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VictoryScreen()))),
                     ],
-                  )),
-                  // Floor Line
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(7, (i) {
-                    String t = i < floor.length ? floor[i] : "";
-                    return _buildPhysicsTile(t, empty: t == "");
-                  })),
-                  const SizedBox(height: 12),
-                  PhysicsButton(
-                    text: selectedColor != null ? "PLACE ${selectedColor!.toUpperCase()}" : "SELECT TILES",
-                    color: selectedColor != null ? tTeal : Colors.grey[400]!,
-                    shadowColor: selectedColor != null ? const Color(0xFF1A695F) : Colors.grey[500]!,
-                    onTap: () {
-                      if (selectedColor != null) {
-                        // TODO: Send Pick event to server
-                        setState(() { selectedColor = null; selectedKiln = null; });
-                      }
-                    },
                   ),
-                ],
-              ),
-            )),
+                ),
+
+                // ZONE 2: MARKET (Dimmed if not turn)
+                Expanded(
+                  flex: 3,
+                  child: Opacity(
+                    opacity: isMyTurn ? 1.0 : 0.5,
+                    child: IgnorePointer(
+                      ignoring: !isMyTurn,
+                      child: Column(
+                        children: [
+                          Wrap(
+                            alignment: WrapAlignment.center, spacing: 12, runSpacing: 12,
+                            children: List.generate(factories.length, (kIdx) => Container(
+                              width: 64, height: 64, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                              child: Center(child: Wrap(children: factories[kIdx].map((c) {
+                                bool isHeld = heldColor == c && sourceKilnIdx == kIdx;
+                                bool dim = heldColor != null && !isHeld && sourceKilnIdx == kIdx;
+                                return GestureDetector(
+                                  onTap: () => _selectFromKiln(kIdx, c),
+                                  child: _buildTile(c, opacity: dim ? 0.4 : 1.0, scale: isHeld ? 1.2 : 1.0),
+                                );
+                              }).toList())),
+                            )),
+                          ),
+                          const SizedBox(height: 12),
+                          // Center Pool
+                          GestureDetector(
+                            onTap: () => heldColor != null ? setState(() => heldColor = null) : null, // Tap background to undo
+                            child: Container(
+                              height: 44, width: 220, decoration: BoxDecoration(color: Colors.black.withOpacity(0.05), borderRadius: BorderRadius.circular(22)),
+                              child: Center(child: center.isEmpty ? const Text("CENTER POOL", style: TextStyle(fontSize: 10, color: Colors.grey)) : Wrap(children: center.map((c) => GestureDetector(onTap: () => _selectFromCenter(c), child: _buildTile(c))).toList())),
+                            ),
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ZONE 3: WORKSHOP
+                Expanded(
+                  flex: 4,
+                  child: Container(
+                    color: Colors.white, padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                          Text("MY WORKSHOP", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[400])),
+                          Text("SCORE: ${myBoard['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: tTeal)),
+                        ]),
+                        const SizedBox(height: 16),
+                        Expanded(child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // PATTERN LINES (The Target)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: List.generate(5, (rIdx) {
+                                bool isLegal = heldColor != null && _isRowLegal(rIdx, heldColor!);
+                                bool isHovered = hoveredRow == rIdx;
+                                return GestureDetector(
+                                  onTap: isLegal ? () {
+                                    HapticFeedback.mediumImpact();
+                                    // TODO: Send PLACEMENT to server
+                                    setState(() { heldColor = null; hoveredRow = null; });
+                                  } : () {
+                                    if (heldColor != null) HapticFeedback.vibrate(); // Error
+                                  },
+                                  onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(vertical: 2),
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: isHovered ? (isLegal ? tTeal : tTerra) : (isLegal ? tTeal.withOpacity(0.3) : Colors.transparent), width: 2),
+                                    ),
+                                    child: Row(
+                                      children: List.generate(rIdx + 1, (cIdx) {
+                                        String existing = patternLines[rIdx][cIdx];
+                                        if (existing != "") return _buildTile(existing);
+                                        // GHOSTING LOGIC
+                                        if (isHovered && isLegal && heldCount != null) {
+                                           // Show ghost if count reaches this slot
+                                           return _buildTile(heldColor!, isGhost: true);
+                                        }
+                                        return Container(width: 22, height: 22, margin: const EdgeInsets.all(1.5), decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)));
+                                      }),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                            const SizedBox(width: 24),
+                            // THE WALL
+                            Column(children: List.generate(5, (r) => Row(children: List.generate(5, (c) => _buildTile(wall[r][c], opacity: wall[r][c] == "" ? 0.05 : 1.0))))),
+                          ],
+                        )),
+                        const SizedBox(height: 16),
+                        PhysicsButton(
+                          text: heldColor != null ? "PLACE ${heldColor!.toUpperCase()}" : "SELECT TILES",
+                          color: heldColor != null ? tTeal : Colors.grey[400]!,
+                          shadowColor: heldColor != null ? const Color(0xFF1A695F) : Colors.grey[500]!,
+                          onTap: () {},
+                        )
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            // UNDO OVERLAY (Tap table to deselect)
+            if (heldColor != null) Positioned.fill(child: GestureDetector(onTap: () => setState(() => heldColor = null), child: Container(color: Colors.transparent))),
           ],
         ),
       ),
