@@ -12,13 +12,12 @@ class LobbyScreen extends StatefulWidget {
 class _LobbyScreenState extends State<LobbyScreen> {
   String roomCode = "...";
   List<String> players = [];
+  bool _isStarting = false;
   late StreamSubscription _sub;
 
   @override
   void initState() {
     super.initState();
-    
-    // THE FIX: Read from memory cache immediately so UI doesn't hang!
     if (socketService.lastRoomUpdate != null) {
       roomCode = socketService.lastRoomUpdate!['payload']['code'];
       players = List<String>.from(socketService.lastRoomUpdate!['payload']['players']);
@@ -32,9 +31,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
         });
       }
       if (message['type'] == 'GAME_STARTED') {
-        Navigator.pushReplacement(context, MaterialPageRoute(
-          builder: (_) => GameScreen(initialState: message['payload'])
-        ));
+        _sub.cancel();
+        if (mounted) {
+          setState(() { _isStarting = false; });
+          Navigator.pushReplacement(context, MaterialPageRoute(
+            builder: (_) => GameScreen(initialState: message['payload'])
+          ));
+        }
       }
     });
   }
@@ -76,7 +79,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: ElevatedButton(
-                onPressed: players.length >= 2 ? () {
+                onPressed: (players.length >= 2 && !_isStarting) ? () {
+                  setState(() { _isStarting = true; });
                   socketService.send('START_GAME', {'code': roomCode});
                 } : null,
                 style: ElevatedButton.styleFrom(
@@ -85,10 +89,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   disabledBackgroundColor: Colors.grey[300]
                 ),
-                child: Text(
-                  players.length >= 2 ? "START GAME" : "WAITING FOR PLAYERS...",
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
-                ),
+                child: _isStarting 
+                  ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text(
+                      players.length >= 2 ? "START GAME" : "WAITING FOR PLAYERS...",
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                    ),
               ),
             )
           ],
