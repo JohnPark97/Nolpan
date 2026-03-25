@@ -4,14 +4,14 @@ import 'screens/welcome.dart';
 
 final socketService = SocketService();
 
-// STRICT DESIGN TOKENS (tIce officially included!)
+// THE DESIGN TOKENS (Shared across all screens)
 const Color tBg = Color(0xFFF9F7F3);
 const Color tSurface = Color(0xFFFFFFFF);
 const Color tTeal = Color(0xFF2A9D8F);
 const Color tTerra = Color(0xFFE76F51);
 const Color tInk = Color(0xFF2B2D42);
 const Color tGold = Color(0xFFE9C46A);
-const Color tIce = Color(0xFFE0E5EC); // <-- THE MISSING TOKEN
+const Color tIce = Color(0xFFE0E5EC);
 
 void main() {
   runApp(const MaterialApp(
@@ -20,6 +20,7 @@ void main() {
   ));
 }
 
+// SHARED 3D PHYSICS BUTTON ENGINE
 class PhysicsButton extends StatefulWidget {
   final String text;
   final Color color;
@@ -44,7 +45,6 @@ class PhysicsButton extends StatefulWidget {
 
 class _PhysicsButtonState extends State<PhysicsButton> {
   bool _isPressed = false;
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -52,8 +52,8 @@ class _PhysicsButtonState extends State<PhysicsButton> {
       onTapUp: (_) { setState(() => _isPressed = false); widget.onTap(); },
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
+        duration: const Duration(milliseconds: 100),
+        curve: const Cubic(0.2, 0.8, 0.2, 1),
         margin: EdgeInsets.only(top: _isPressed ? 4 : 0, bottom: _isPressed ? 0 : 4),
         width: widget.isFullWidth ? double.infinity : null,
         height: 60,
