@@ -4,7 +4,6 @@ import 'screens/welcome.dart';
 
 final socketService = SocketService();
 
-// THE DESIGN TOKENS (Shared across all screens)
 const Color tBg = Color(0xFFF9F7F3);
 const Color tSurface = Color(0xFFFFFFFF);
 const Color tTeal = Color(0xFF2A9D8F);
@@ -20,7 +19,6 @@ void main() {
   ));
 }
 
-// SHARED 3D PHYSICS BUTTON ENGINE
 class PhysicsButton extends StatefulWidget {
   final String text;
   final Color color;
@@ -47,6 +45,9 @@ class _PhysicsButtonState extends State<PhysicsButton> {
   bool _isPressed = false;
   @override
   Widget build(BuildContext context) {
+    // THE FIX: If button is white, use dark text. Otherwise use white text.
+    Color contentColor = widget.color == Colors.white || widget.color == tSurface ? tInk : Colors.white;
+
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) { setState(() => _isPressed = false); widget.onTap(); },
@@ -64,7 +65,10 @@ class _PhysicsButtonState extends State<PhysicsButton> {
           border: Border(bottom: BorderSide(color: _isPressed ? Colors.transparent : widget.shadowColor, width: 4)),
         ),
         child: Center(
-          child: widget.customChild ?? Text(widget.text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
+          child: widget.customChild ?? Text(
+            widget.text, 
+            style: TextStyle(color: contentColor, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)
+          ),
         ),
       ),
     );
