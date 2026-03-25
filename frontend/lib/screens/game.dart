@@ -14,7 +14,6 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
-    // Parse the 2D array of strings from the Go server
     factories = (widget.initialState['factories'] as List)
         .map((f) => List<String>.from(f))
         .toList();
@@ -51,9 +50,7 @@ class _GameScreenState extends State<GameScreen> {
             child: GridView.builder(
               padding: const EdgeInsets.all(30),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, 
-                crossAxisSpacing: 30, 
-                mainAxisSpacing: 30
+                crossAxisCount: 2, crossAxisSpacing: 30, mainAxisSpacing: 30
               ),
               itemCount: factories.length,
               itemBuilder: (context, i) => Container(
@@ -61,7 +58,7 @@ class _GameScreenState extends State<GameScreen> {
                   color: Colors.white,
                   shape: BoxShape.circle,
                   border: Border.all(color: const Color(0xFFE9C46A), width: 3),
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, 5))]
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))]
                 ),
                 child: Center(
                   child: Wrap(
