@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import '../main.dart';
 import 'victory.dart';
+import 'lobby.dart';
 
 const List<List<String>> wallPattern = [
   ['blue', 'yellow', 'red', 'black', 'white'],
@@ -43,6 +44,16 @@ class _GameScreenState extends State<GameScreen> {
     _sub = socketService.stream.listen((msg) {
       if (msg['type'] == 'GAME_UPDATE' || msg['type'] == 'GAME_STARTED') {
         if (mounted) setState(() { _updateState(msg['payload']); });
+      } else if (msg['type'] == 'GAME_OVER') {
+        if (mounted) {
+          _sub.cancel();
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => VictoryScreen(finalState: msg['payload'])));
+        }
+      } else if (msg['type'] == 'RETURN_TO_LOBBY') {
+        if (mounted) {
+          _sub.cancel();
+          Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LobbyScreen()), (route) => false);
+        }
       }
     });
   }
@@ -150,7 +161,7 @@ class _GameScreenState extends State<GameScreen> {
       case 'first_player': 
         return Container(width: size, height: size, margin: const EdgeInsets.all(1.5), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), border: Border.all(color: tGold, width: 2)), child: const Center(child: Text("1", style: TextStyle(color: tGold, fontWeight: FontWeight.bold, fontSize: 10))));
     }
-    return Transform.scale(
+    Widget tile = Transform.scale(
       scale: scale,
       child: Container(
         width: size, height: size, margin: const EdgeInsets.all(1.5),
@@ -162,39 +173,10 @@ class _GameScreenState extends State<GameScreen> {
         child: Center(child: Icon(icon, size: size * 0.45, color: (colorName == 'white' ? Colors.grey : Colors.white).withOpacity(0.5 * opacity))),
       ),
     );
-  }
-
-  // --- COMPONENT: OPPONENT MINI BOARD ---
-  Widget _buildMiniWorkshop(Map<String, dynamic> board) {
-    List wall = board['wall'] ?? [];
-    List pattern = board['pattern_lines'] ?? [];
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Mini Staircase
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: List.generate(5, (r) => Row(
-            children: List.generate(r + 1, (c) {
-              String tile = (pattern.length > r && pattern[r].length > c) ? pattern[r][c] : "";
-              return Container(margin: const EdgeInsets.all(0.5), width: 5, height: 5, decoration: BoxDecoration(color: tile == "" ? Colors.grey[200] : _getBaseColor(tile), borderRadius: BorderRadius.circular(1)));
-            })
-          ))
-        ),
-        const SizedBox(width: 8),
-        // Mini Wall
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(5, (r) => Row(
-            mainAxisSize: MainAxisSize.min,
-            children: List.generate(5, (c) {
-              String tile = (wall.length > r && wall[r].length > c) ? wall[r][c] : "";
-              Color bg = tile != "" ? _getBaseColor(tile) : _getBaseColor(wallPattern[r][c]).withOpacity(0.1);
-              return Container(margin: const EdgeInsets.all(0.5), width: 5, height: 5, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(1)));
-            })
-          )),
-        ),
-      ],
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (Widget child, Animation<double> animation) => ScaleTransition(scale: animation, child: child),
+      child: Container(key: ValueKey(colorName + empty.toString() + isGhost.toString()), child: tile),
     );
   }
 
@@ -215,7 +197,6 @@ class _GameScreenState extends State<GameScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // THE FIX 1: UNDO LAYER AT BOTTOM OF STACK
             if (heldColor != null) Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() { heldColor = null; heldKilnIdx = null; heldCount = null; hoveredRow = null; }))),
             
             Column(
@@ -226,12 +207,11 @@ class _GameScreenState extends State<GameScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(isMyTurn ? "YOUR TURN" : "OPPONENT'S TURN", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: tTeal, letterSpacing: 2)),
-                      IconButton(icon: const Icon(Icons.emoji_events, color: tGold, size: 24), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VictoryScreen()))),
+                      IconButton(icon: const Icon(Icons.settings, color: Colors.transparent, size: 24), onPressed: null), // Spacer
                     ],
                   ),
                 ),
 
-                // ZONE 1: COMPRESSED OPPONENTS (FIX 2 & 5)
                 Expanded(flex: 1, child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16), padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
@@ -239,6 +219,8 @@ class _GameScreenState extends State<GameScreen> {
                     shrinkWrap: true,
                     children: opponents.map((opp) {
                       var board = boards![opp] ?? {};
+                      List oppWall = board['wall'] ?? [];
+                      List oppFloor = board['floor_line'] ?? [];
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
@@ -246,8 +228,19 @@ class _GameScreenState extends State<GameScreen> {
                             CircleAvatar(radius: 10, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 8, color: Colors.white))),
                             const SizedBox(width: 8),
                             Expanded(child: Text(opp, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                            // FIX 2: Rendering Mini Ghost Workshop
-                            _buildMiniWorkshop(board),
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: List.generate(5, (r) => Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: List.generate(5, (c) {
+                                  String tile = (oppWall.length > r && oppWall[r].length > c) ? oppWall[r][c] : "";
+                                  Color bg = tile != "" ? _getBaseColor(tile) : _getBaseColor(wallPattern[r][c]).withOpacity(0.1);
+                                  return Container(margin: const EdgeInsets.all(0.5), width: 5, height: 5, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(1)));
+                                })
+                              )),
+                            ),
+                            const SizedBox(width: 12),
+                            Row(children: List.generate(oppFloor.length.clamp(0, 7), (i) => Container(margin: const EdgeInsets.only(right: 2), width: 3, height: 3, decoration: const BoxDecoration(color: tTerra, shape: BoxShape.circle)))),
                             const SizedBox(width: 12),
                             Text("${board['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)),
                           ],
@@ -257,7 +250,6 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 )),
 
-                // ZONE 2: MARKET
                 Expanded(flex: 3, child: Opacity(
                   opacity: isMyTurn ? 1.0 : 0.5,
                   child: IgnorePointer(
@@ -290,7 +282,6 @@ class _GameScreenState extends State<GameScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        // FIX 3: RECESSED TRAY
                         Container(
                           key: centerKey,
                           constraints: const BoxConstraints(minHeight: 80), width: double.infinity, margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -308,7 +299,6 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 )),
 
-                // ZONE 3: WORKSHOP (FIX 4 & 5)
                 Expanded(flex: 5, child: Container(
                   color: Colors.white, padding: const EdgeInsets.all(16),
                   child: Column(
@@ -317,7 +307,7 @@ class _GameScreenState extends State<GameScreen> {
                         const Text("MY WORKSHOP", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
                         Text("SCORE: ${myBoard['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: tTeal)),
                       ]),
-                      const Spacer(), // FIX 4: Vertical Centering
+                      const Spacer(),
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Column(
@@ -326,7 +316,6 @@ class _GameScreenState extends State<GameScreen> {
                               bool isLegal = heldColor != null && _isRowLegal(rIdx, heldColor!);
                               bool isHovered = hoveredRow == rIdx;
                               return GestureDetector(
-                                // FIX 1: Clicking row restores logic
                                 onTap: isLegal ? () => _commitTurn(rIdx) : null,
                                 onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
                                 child: Container(
@@ -370,7 +359,7 @@ class _GameScreenState extends State<GameScreen> {
                                 ),
                               );
                             }),
-                            const SizedBox(height: 24), // FIX 4: Margin
+                            const SizedBox(height: 24),
                             GestureDetector(
                               onTap: heldColor != null ? () => _commitTurn(-1) : null,
                               onPanUpdate: (_) => setState(() => hoveredRow = -1),
