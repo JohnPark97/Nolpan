@@ -219,7 +219,6 @@ class _GameScreenState extends State<GameScreen> {
                             CircleAvatar(radius: 12, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
                             const SizedBox(width: 8),
                             Expanded(child: Text(opp, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tInk))),
-                            // THE FIX: Unminified Opponent Heatmap logic (Proper bracket matching)
                             Column(
                               mainAxisSize: MainAxisSize.min,
                               children: List.generate(
@@ -250,7 +249,6 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 )),
 
-                // ZONE 2: MARKET
                 Expanded(flex: 3, child: Opacity(
                   opacity: isMyTurn ? 1.0 : 0.5,
                   child: IgnorePointer(
@@ -313,7 +311,6 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 )),
 
-                // ZONE 3: WORKSHOP
                 Expanded(flex: 5, child: Container(
                   color: Colors.white, padding: const EdgeInsets.all(16),
                   child: Column(
@@ -345,31 +342,37 @@ class _GameScreenState extends State<GameScreen> {
                                         decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: isHovered ? (isLegal ? tTeal : tTerra) : (isLegal ? tTeal.withOpacity(0.3) : Colors.transparent), width: 2)),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
-                                          children: List.generate(rIdx + 1, (cIdx) {
-                                            String t = (patternLines.length > rIdx && patternLines[rIdx].length > cIdx) ? patternLines[rIdx][cIdx] : "";
-                                            if (t != "") return _buildTile(t, size: 24);
-                                            if (isHovered && isLegal && heldCount != null) {
-                                               int emptySlots = (patternLines[rIdx] as List).where((s) => s == "").length;
-                                               int rowLen = (patternLines[rIdx] as List).length;
-                                               int slotIndex = (cIdx - (rowLen - emptySlots)).toInt();
-                                               if (slotIndex >= 0 && slotIndex < heldCount!) return _buildTile(heldColor!, size: 24, isGhost: true);
-                                            }
-                                            return _buildTile("", size: 24, empty: true);
-                                          }),
+                                          children: [
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: List.generate(5, (cIdx) {
+                                                if (cIdx < 4 - rIdx) return Container(width: 24, height: 24, margin: const EdgeInsets.all(1.5)); 
+                                                int slotIdx = cIdx - (4 - rIdx);
+                                                String t = (patternLines.length > rIdx && patternLines[rIdx].length > slotIdx) ? patternLines[rIdx][slotIdx] : "";
+                                                if (t != "") return _buildTile(t, size: 24);
+                                                
+                                                if (isHovered && isLegal && heldCount != null) {
+                                                   int emptySlots = (patternLines[rIdx] as List).where((s) => s == "").length;
+                                                   int rowLen = (patternLines[rIdx] as List).length;
+                                                   int ghostIdx = (slotIdx - (rowLen - emptySlots)).toInt();
+                                                   if (ghostIdx >= 0 && ghostIdx < heldCount!) return _buildTile(heldColor!, size: 24, isGhost: true);
+                                                }
+                                                return _buildTile("", size: 24, empty: true);
+                                              }),
+                                            ),
+                                            const SizedBox(width: 24),
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: List.generate(5, (cIdx) {
+                                                String t = (wall.length > rIdx && wall[rIdx].length > cIdx) ? wall[rIdx][cIdx] : "";
+                                                return t != "" ? _buildTile(t, size: 24) : _buildTile(wallPattern[rIdx][cIdx], size: 24, isGhost: true);
+                                              }),
+                                            )
+                                          ],
                                         ),
                                       ),
                                     );
                                   }),
-                                ),
-                                const SizedBox(width: 24),
-                                Column(
-                                  children: List.generate(5, (r) => Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: List.generate(5, (c) {
-                                      String t = (wall.length > r && wall[r].length > c) ? wall[r][c] : "";
-                                      return t != "" ? _buildTile(t, size: 24) : _buildTile(wallPattern[r][c], size: 24, isGhost: true);
-                                    })
-                                  )),
                                 ),
                               ],
                             ),
@@ -412,18 +415,17 @@ class _GameScreenState extends State<GameScreen> {
                         text: isMyTurn ? (heldColor != null ? "TAP ROW TO PLACE" : "SELECT TILES") : "WAITING FOR ${turnPlayer?.toUpperCase()}",
                         color: isMyTurn ? (heldColor != null ? tTeal : Colors.grey[400]!) : Colors.grey[300]!,
                         shadowColor: isMyTurn ? (heldColor != null ? const Color(0xFF1A695F) : Colors.grey[500]!) : Colors.grey[400]!,
-                        onTap: () {
-                          if (heldColor != null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tap a valid row on your board to place the tiles!"), duration: Duration(seconds: 1))); }
-                        },
+                        onTap: () { if (heldColor != null) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tap a valid row on your board to place the tiles!"), duration: Duration(seconds: 1))); },
                       )
                     ],
                   ),
-                )
-              ),
-            ],
-          ),
-          if (heldColor != null) Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: () => setState(() { heldColor = null; selectedRow = null; heldKilnIdx = null; }), child: Container())),
-        ],
+                )),
+              ],
+            ),
+            // THE FIX: Removed 'selectedRow' from the background tap-to-undo layer
+            if (heldColor != null) Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: () => setState(() { heldColor = null; heldKilnIdx = null; heldCount = null; hoveredRow = null; }), child: Container())),
+          ],
+        ),
       ),
     );
   }
