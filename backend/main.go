@@ -19,10 +19,11 @@ type PlayerBoard struct {
 }
 
 type GameState struct {
-	Factories  [][]string              `json:"factories"`
-	Center     []string                `json:"center"`
-	TurnPlayer string                  `json:"turn_player"` // NEW: Explicit turn tracking
-	Boards     map[string]*PlayerBoard `json:"boards"`
+	Factories             [][]string              `json:"factories"`
+	Center                []string                `json:"center"`
+	TurnPlayer            string                  `json:"turn_player"`
+	CenterHasFirstPlayer  bool                    `json:"center_has_first_player"`
+	Boards                map[string]*PlayerBoard `json:"boards"`
 }
 
 type Room struct {
@@ -64,9 +65,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.mu.Lock()
 				delete(room.Clients, ws)
 				var newPlayers []string
-				for _, p := range room.Players {
-					if p != currentName { newPlayers = append(newPlayers, p) }
-				}
+				for _, p := range room.Players { if p != currentName { newPlayers = append(newPlayers, p) } }
 				room.Players = newPlayers
 				isEmpty := len(room.Players) == 0
 				room.mu.Unlock()
@@ -107,7 +106,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				currentRoomCode = p.Code; currentName = p.Name
 				room.Clients[ws] = p.Name
 				if room.State != nil {
-					data, _ := json.Marshal(map[string]interface{}{"type": "GAME_STARTED", "payload": room.State})
+					data, _ := json.Marshal(map[string]interface{}{"type": "GAME_UPDATE", "payload": room.State})
 					ws.WriteMessage(websocket.TextMessage, data)
 				}
 				broadcastRoom(room)
@@ -143,6 +142,86 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				broadcastMessage(room, "GAME_STARTED", room.State)
 			}
 		}
+
+        // THE NEW DRAFTING ENGINE LOGIC
+		if msg.Type == "PICK_TILES" {
+			var p struct {
+				Code      string `json:"code"`
+				Player    string `json:"player"`
+				KilnIdx   int    `json:"kiln_idx"` // -1 for center
+				Color     string `json:"color"`
+				TargetRow int    `json:"target_row"` // 0-4 pattern lines, -1 for floor
+			}
+			json.Unmarshal(msg.Payload, &p)
+			
+			if room, ok := rooms[p.Code]; ok && room.State != nil {
+				// Security Check: Is it their turn?
+				if room.State.TurnPlayer != p.Player { roomsMu.Unlock(); continue }
+
+				pickedCount := 0
+				
+				// 1. DRAFT TILES
+				if p.KilnIdx >= 0 && p.KilnIdx < len(room.State.Factories) {
+					// From Factory
+					for _, tile := range room.State.Factories[p.KilnIdx] {
+						if tile == p.Color { pickedCount++ } else { room.State.Center = append(room.State.Center, tile) }
+					}
+					room.State.Factories[p.KilnIdx] = []string{} // Empty it
+				} else if p.KilnIdx == -1 {
+					// From Center
+					newCenter := []string{}
+					for _, tile := range room.State.Center {
+						if tile == p.Color { pickedCount++ } else { newCenter = append(newCenter, tile) }
+					}
+					room.State.Center = newCenter
+					
+					// First Player Token Logic
+					if room.State.CenterHasFirstPlayer {
+						room.State.CenterHasFirstPlayer = false
+						room.State.Boards[p.Player].FloorLine = append(room.State.Boards[p.Player].FloorLine, "first_player")
+					}
+				}
+
+				// 2. PLACE TILES
+				board := room.State.Boards[p.Player]
+				if p.TargetRow >= 0 && p.TargetRow < 5 {
+					// Find empty slots in target row
+					emptySlots := 0
+					for _, slot := range board.PatternLines[p.TargetRow] { if slot == "" { emptySlots++ } }
+					
+					for i := 0; i < pickedCount; i++ {
+						if emptySlots > 0 {
+							// Fill an empty slot
+							for j := 0; j < len(board.PatternLines[p.TargetRow]); j++ {
+								if board.PatternLines[p.TargetRow][j] == "" {
+									board.PatternLines[p.TargetRow][j] = p.Color
+									emptySlots--
+									break
+								}
+							}
+						} else {
+							// Overflow to floor
+							board.FloorLine = append(board.FloorLine, p.Color)
+						}
+					}
+				} else {
+					// Sent directly to floor line
+					for i := 0; i < pickedCount; i++ { board.FloorLine = append(board.FloorLine, p.Color) }
+				}
+
+				// 3. PASS TURN
+				for i, name := range room.Players {
+					if name == p.Player {
+						nextIdx := (i + 1) % len(room.Players)
+						room.State.TurnPlayer = room.Players[nextIdx]
+						break
+					}
+				}
+
+				broadcastMessage(room, "GAME_UPDATE", room.State)
+			}
+		}
+
 		roomsMu.Unlock()
 	}
 }
@@ -177,10 +256,11 @@ func generateInitialState(players []string) *GameState {
 	}
 
 	return &GameState{
-		Factories:  factories,
-		Center:     []string{},
-		TurnPlayer: players[0], // Set first player as turn starter
-		Boards:     boards,
+		Factories:            factories,
+		Center:               []string{},
+		TurnPlayer:           players[0], 
+		CenterHasFirstPlayer: true,
+		Boards:               boards,
 	}
 }
 
