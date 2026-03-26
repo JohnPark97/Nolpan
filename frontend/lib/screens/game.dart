@@ -37,18 +37,22 @@ class _GameScreenState extends State<GameScreen> {
   final List<GlobalKey> patternRowKeys = List.generate(5, (_) => GlobalKey());
   final GlobalKey floorKey = GlobalKey();
 
+  // THE JUICE: Animation Flags
+  bool _isAnimatingScoring = false;
+  bool _showHighlight = false;
+  bool _showSlide = false;
+  bool _showPop = false;
+  bool _showShatter = false;
+
   @override
   void initState() {
     super.initState();
     _updateState(widget.initialState);
     _sub = socketService.stream.listen((msg) {
-      if (msg['type'] == 'GAME_UPDATE' || msg['type'] == 'GAME_STARTED') {
-        if (mounted) setState(() { _updateState(msg['payload']); });
+      if (msg['type'] == 'GAME_UPDATE') {
+        _handleIncomingState(msg['payload'], isGameOver: false);
       } else if (msg['type'] == 'GAME_OVER') {
-        if (mounted) {
-          _sub.cancel();
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => VictoryScreen(finalState: msg['payload'])));
-        }
+        _handleIncomingState(msg['payload'], isGameOver: true);
       } else if (msg['type'] == 'RETURN_TO_LOBBY') {
         if (mounted) {
           _sub.cancel();
@@ -56,6 +60,57 @@ class _GameScreenState extends State<GameScreen> {
         }
       }
     });
+  }
+
+  void _handleIncomingState(Map<String, dynamic> payload, {bool isGameOver = false}) async {
+    if (boards == null || payload['factories'] == null) {
+      _updateState(payload);
+      if (isGameOver && mounted) { _sub.cancel(); Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => VictoryScreen(finalState: payload))); }
+      return;
+    }
+
+    bool oldEmpty = factories!.every((f) => f.isEmpty);
+    bool newFull = (payload['factories'] as List).isNotEmpty && (payload['factories'][0] as List).isNotEmpty;
+
+    if (oldEmpty && (newFull || isGameOver)) {
+      // PHASE 1: HIGHLIGHT
+      setState(() { _isAnimatingScoring = true; _showHighlight = true; });
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+
+      // PHASE 2: SLIDE
+      setState(() { _showSlide = true; });
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+
+      // PHASE 3: POP (DOPAMINE HIT)
+      setState(() { _showPop = true; });
+      HapticFeedback.heavyImpact();
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+
+      // PHASE 4: SHATTER
+      setState(() { _showShatter = true; });
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+
+      // PHASE 5: NEXT ROUND OR GAME OVER
+      setState(() {
+        _isAnimatingScoring = false;
+        _showHighlight = false;
+        _showSlide = false;
+        _showPop = false;
+        _showShatter = false;
+        _updateState(payload);
+      });
+
+      if (isGameOver && mounted) {
+        _sub.cancel();
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => VictoryScreen(finalState: payload)));
+      }
+    } else {
+      _updateState(payload);
+    }
   }
 
   void _updateState(Map<String, dynamic> payload) {
@@ -78,37 +133,27 @@ class _GameScreenState extends State<GameScreen> {
 
   String _capitalize(String s) => s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1)}' : s;
 
-  // SPRINT 8: THE VALIDATION ENGINE
   String? _getPlacementError(int rowIdx, String color) {
-    if (rowIdx == -1) return null; // Edge Case 5: Direct to penalty is always allowed
+    if (rowIdx == -1) return null; 
 
     String myName = socketService.playerName ?? "";
     Map<String, dynamic> myBoard = boards![myName] ?? {};
     List wall = myBoard['wall'] ?? [];
     List patternLines = myBoard['pattern_lines'] ?? [];
 
-    // Edge Case 2: Wall Collision
     for (int col = 0; col < 5; col++) {
       if (wall.length > rowIdx && wall[rowIdx].length > col && wall[rowIdx][col] == color) {
         return "You've already built a ${_capitalize(color)} tile in that row!";
       }
     }
-
     if (patternLines.length > rowIdx) {
-      // Edge Case 1: Color Mismatch
       for (var t in patternLines[rowIdx]) {
-        if (t != "" && t != color) {
-          return "Hold up, boss! That row is already holding another color.";
-        }
+        if (t != "" && t != color) return "Hold up, boss! That row is already holding another color.";
       }
-      // Edge Case 3: Full Pattern Lines
       int emptySlots = (patternLines[rowIdx] as List).where((s) => s == "").length;
-      if (emptySlots == 0) {
-        return "That row is completely full!";
-      }
+      if (emptySlots == 0) return "That row is completely full!";
     }
-
-    return null; // Legal
+    return null; 
   }
 
   void _flyTile(GlobalKey startKey, GlobalKey endKey, String color, VoidCallback onComplete) {
@@ -163,24 +208,28 @@ class _GameScreenState extends State<GameScreen> {
       case 'red': return tTerra;
       case 'yellow': return tGold;
       case 'black': return tInk;
-      case 'white': return tIce;
+      case 'white': return const Color(0xFFF9F7F3); // Pearl Background
       default: return Colors.transparent;
     }
   }
 
+  // DESIGN SYSTEM UPDATE: The Pearl Tile
   Widget _buildTile(String colorName, {double size = 20, double opacity = 1.0, bool isGhost = false, bool empty = false, double scale = 1.0}) {
     if (empty) return Container(width: size, height: size, margin: const EdgeInsets.all(1.5), decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)));
+    
     Color bg = _getBaseColor(colorName);
-    IconData? icon;
+    IconData? icon; Color shadow = Colors.transparent;
+    
     switch (colorName) {
-      case 'blue': icon = Icons.star; break;
-      case 'red': icon = Icons.menu; break;
-      case 'yellow': icon = Icons.circle; break;
-      case 'black': icon = Icons.close; break;
-      case 'white': icon = Icons.square_outlined; break;
+      case 'blue': icon = Icons.star; shadow = const Color(0xFF1A695F); break;
+      case 'red': icon = Icons.menu; shadow = const Color(0xFFA84128); break;
+      case 'yellow': icon = Icons.circle; shadow = const Color(0xFFC9A24A); break;
+      case 'black': icon = Icons.close; shadow = const Color(0xFF11121A); break;
+      case 'white': icon = Icons.square; shadow = const Color(0xFFD5CABD); break; // Pearl Shadow/Border
       case 'first_player': 
         return Container(width: size, height: size, margin: const EdgeInsets.all(1.5), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), border: Border.all(color: tGold, width: 2)), child: const Center(child: Text("1", style: TextStyle(color: tGold, fontWeight: FontWeight.bold, fontSize: 10))));
     }
+    
     Widget tile = Transform.scale(
       scale: scale,
       child: Container(
@@ -188,23 +237,21 @@ class _GameScreenState extends State<GameScreen> {
         decoration: BoxDecoration(
           color: isGhost ? bg.withOpacity(0.15) : bg.withOpacity(opacity),
           borderRadius: BorderRadius.circular(4),
-          border: colorName == 'white' ? Border.all(color: Colors.grey[300]!) : null,
+          border: colorName == 'white' && !isGhost ? Border.all(color: shadow, width: 2) : null,
+          boxShadow: (opacity == 1.0 && !isGhost) ? [BoxShadow(color: shadow, offset: const Offset(0, 3))] : [],
         ),
-        child: Center(child: Icon(icon, size: size * 0.45, color: (colorName == 'white' ? Colors.grey : Colors.white).withOpacity(0.5 * opacity))),
+        child: Center(child: Icon(icon, size: size * 0.45, color: (colorName == 'white' ? tTeal : Colors.white).withOpacity(0.5 * opacity))),
       ),
     );
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      transitionBuilder: (Widget child, Animation<double> animation) => ScaleTransition(scale: animation, child: child),
-      child: Container(key: ValueKey(colorName + empty.toString() + isGhost.toString()), child: tile),
-    );
+    
+    return tile;
   }
 
   @override
   Widget build(BuildContext context) {
     if (factories == null || boards == null) return const Scaffold(body: Center(child: CircularProgressIndicator(color: tTeal)));
     String myName = socketService.playerName ?? "Player";
-    bool isMyTurn = turnPlayer == myName;
+    bool isMyTurn = turnPlayer == myName && !_isAnimatingScoring;
     Map<String, dynamic> myBoard = boards![myName] ?? {};
     List patternLines = myBoard['pattern_lines'] ?? [];
     List wall = myBoard['wall'] ?? [];
@@ -232,57 +279,78 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 ),
 
-                Expanded(flex: 1, child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16), padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-                  child: opponents.isEmpty ? const Center(child: Text("WAITING FOR OPPONENTS...", style: TextStyle(fontSize: 10, color: Colors.grey))) : ListView(
-                    shrinkWrap: true,
-                    children: opponents.map((opp) {
-                      var board = boards![opp] ?? {};
-                      List oppWall = board['wall'] ?? [];
-                      List oppFloor = board['floor_line'] ?? [];
-                      List oppPattern = board['pattern_lines'] ?? [];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            CircleAvatar(radius: 10, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 8, color: Colors.white))),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(opp, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: List.generate(5, (r) => Row(
-                                    children: List.generate(r + 1, (c) {
-                                      String tile = (oppPattern.length > r && oppPattern[r].length > c) ? oppPattern[r][c] : "";
-                                      return Container(margin: const EdgeInsets.all(0.5), width: 5, height: 5, decoration: BoxDecoration(color: tile == "" ? Colors.grey[200] : _getBaseColor(tile), borderRadius: BorderRadius.circular(1)));
-                                    })
-                                  ))
-                                ),
-                                const SizedBox(width: 8),
-                                Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: List.generate(5, (r) => Row(
+                // LAYOUT FIX: Centered & Compressed Opponent Cards
+                Expanded(flex: 1, child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    child: opponents.isEmpty ? const Center(child: Text("WAITING FOR OPPONENTS...", style: TextStyle(fontSize: 10, color: Colors.grey))) : Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 12, runSpacing: 12,
+                      children: opponents.map((opp) {
+                        var board = boards![opp] ?? {};
+                        List oppWall = board['wall'] ?? [];
+                        List oppPattern = board['pattern_lines'] ?? [];
+                        List oppFloor = board['floor_line'] ?? [];
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircleAvatar(radius: 12, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 8),
+                              Text(opp, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 16),
+                              
+                              // OPPONENT MINI BOARD
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Row(
                                     mainAxisSize: MainAxisSize.min,
-                                    children: List.generate(5, (c) {
-                                      String tile = (oppWall.length > r && oppWall[r].length > c) ? oppWall[r][c] : "";
-                                      Color bg = tile != "" ? _getBaseColor(tile) : _getBaseColor(wallPattern[r][c]).withOpacity(0.1);
-                                      return Container(margin: const EdgeInsets.all(0.5), width: 5, height: 5, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(1)));
-                                    })
-                                  )),
-                                ),
-                              ]
-                            ),
-                            const SizedBox(width: 12),
-                            Row(children: List.generate(oppFloor.length.clamp(0, 7), (i) => Container(margin: const EdgeInsets.only(right: 2), width: 3, height: 3, decoration: const BoxDecoration(color: tTerra, shape: BoxShape.circle)))),
-                            const SizedBox(width: 12),
-                            Text("${board['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)),
-                          ],
-                        ),
-                      );
-                    }).toList(),
+                                    children: [
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: List.generate(5, (r) => Row(
+                                          children: List.generate(r + 1, (c) {
+                                            String tile = (oppPattern.length > r && oppPattern[r].length > c) ? oppPattern[r][c] : "";
+                                            return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4, decoration: BoxDecoration(color: tile == "" ? Colors.grey[200] : _getBaseColor(tile), borderRadius: BorderRadius.circular(1)));
+                                          })
+                                        ))
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: List.generate(5, (r) => Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: List.generate(5, (c) {
+                                            String tile = (oppWall.length > r && oppWall[r].length > c) ? oppWall[r][c] : "";
+                                            Color bg = tile != "" ? _getBaseColor(tile) : _getBaseColor(wallPattern[r][c]).withOpacity(0.1);
+                                            return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(1)));
+                                          })
+                                        )),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: List.generate(7, (i) => Container(
+                                      margin: const EdgeInsets.symmetric(horizontal: 0.5), width: 3, height: 3,
+                                      decoration: BoxDecoration(color: i < oppFloor.length ? tTerra : Colors.grey[200], shape: BoxShape.circle)
+                                    ))
+                                  )
+                                ],
+                              ),
+                              
+                              const SizedBox(width: 16),
+                              Text("${board['score'] ?? 0}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ),
                 )),
 
@@ -353,26 +421,27 @@ class _GameScreenState extends State<GameScreen> {
                               bool isLegal = heldColor != null && errorMsg == null;
                               bool isHovered = hoveredRow == rIdx;
                               
+                              bool isFullRow = (patternLines[rIdx] as List).where((s) => s == "").isEmpty;
+                              bool shouldHighlight = _showHighlight && isFullRow;
+                              
                               return GestureDetector(
                                 onTap: heldColor != null ? () {
-                                  if (isLegal) {
-                                    _commitTurn(rIdx);
-                                  } else {
+                                  if (isLegal) _commitTurn(rIdx);
+                                  else {
                                     HapticFeedback.vibrate();
                                     ScaffoldMessenger.of(context).clearSnackBars();
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text(errorMsg!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                      backgroundColor: tTerra,
-                                      behavior: SnackBarBehavior.floating,
-                                      duration: const Duration(seconds: 2),
-                                    ));
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: tTerra, behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2)));
                                   }
                                 } : null,
                                 onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
                                 child: Container(
                                   key: patternRowKeys[rIdx],
                                   margin: const EdgeInsets.symmetric(vertical: 2),
-                                  color: Colors.transparent,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(6), 
+                                    // THE JUICE: Glow on highlight
+                                    boxShadow: shouldHighlight ? [BoxShadow(color: tGold.withOpacity(0.4), blurRadius: 12, spreadRadius: 2)] : [],
+                                  ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -392,9 +461,20 @@ class _GameScreenState extends State<GameScreen> {
                                             if (ghostStart < 0) ghostStart = 0;
                                           }
 
-                                          if (slotIdx < ghostStart) return _buildTile("", size: 24, empty: true);
-                                          else if (slotIdx >= ghostStart && slotIdx < emptyCount) return _buildTile(heldColor!, size: 24, isGhost: true);
-                                          else return _buildTile(rowColor, size: 24);
+                                          Widget tileW;
+                                          if (slotIdx < ghostStart) tileW = _buildTile("", size: 24, empty: true);
+                                          else if (slotIdx >= ghostStart && slotIdx < emptyCount) tileW = _buildTile(heldColor!, size: 24, isGhost: true);
+                                          else tileW = _buildTile(rowColor, size: 24);
+
+                                          // THE JUICE: Slide and Shatter animations
+                                          if (isFullRow) {
+                                            if (_showSlide && slotIdx == rIdx) { // Rightmost tile slides
+                                              tileW = AnimatedContainer(duration: const Duration(milliseconds: 800), curve: Curves.easeInOutCubic, transform: Matrix4.translationValues(80.0, 0, 0), child: tileW);
+                                            } else if (_showShatter && slotIdx < rIdx) { // Others shatter
+                                              tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
+                                            }
+                                          }
+                                          return tileW;
                                         }),
                                       ),
                                       const SizedBox(width: 24),
@@ -422,7 +502,13 @@ class _GameScreenState extends State<GameScreen> {
                                   children: List.generate(7, (i) {
                                     String t = i < floor.length ? floor[i] : "";
                                     if (hoveredRow == -1 && heldColor != null && heldCount != null) { if (i - floor.length >= 0 && i - floor.length < heldCount!) t = heldColor!; }
-                                    return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [_buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor), const SizedBox(height: 4), Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))]));
+                                    
+                                    Widget tileW = _buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor);
+                                    if (_showShatter && t != "") {
+                                      tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
+                                    }
+
+                                    return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [tileW, const SizedBox(height: 4), Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))]));
                                   }),
                                 ),
                               ),
@@ -436,6 +522,25 @@ class _GameScreenState extends State<GameScreen> {
                 )),
               ],
             ),
+            
+            // THE JUICE: Floating Pop Score
+            if (_showPop)
+              Positioned(
+                right: 40, top: MediaQuery.of(context).size.height * 0.5,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 500),
+                  builder: (context, val, child) {
+                    return Transform.translate(
+                      offset: Offset(0, -50 * val),
+                      child: Opacity(
+                        opacity: 1.0 - val,
+                        child: const Text("+ SCORING", style: TextStyle(color: tTeal, fontSize: 24, fontWeight: FontWeight.w900)),
+                      )
+                    );
+                  }
+                )
+              )
           ],
         ),
       ),
