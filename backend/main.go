@@ -19,11 +19,14 @@ type PlayerBoard struct {
 }
 
 type GameState struct {
-	Factories             [][]string              `json:"factories"`
-	Center                []string                `json:"center"`
-	TurnPlayer            string                  `json:"turn_player"`
-	CenterHasFirstPlayer  bool                    `json:"center_has_first_player"`
-	Boards                map[string]*PlayerBoard `json:"boards"`
+	Factories            [][]string              `json:"factories"`
+	Center               []string                `json:"center"`
+	TurnPlayer           string                  `json:"turn_player"`
+	CenterHasFirstPlayer bool                    `json:"center_has_first_player"`
+	Boards               map[string]*PlayerBoard `json:"boards"`
+	Bag                  []string                `json:"-"` // Hidden from client
+	Discard              []string                `json:"-"` // Hidden from client
+	Status               string                  `json:"status"`
 }
 
 type Room struct {
@@ -143,6 +146,16 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+        // SPRINT 10: PLAY AGAIN LOGIC
+		if msg.Type == "PLAY_AGAIN" {
+			var p struct{ Code string `json:"code"` }
+			json.Unmarshal(msg.Payload, &p)
+			if room, ok := rooms[p.Code]; ok {
+				room.State = nil // Wipe game state
+				broadcastMessage(room, "RETURN_TO_LOBBY", map[string]interface{}{"code": room.Code, "players": room.Players})
+			}
+		}
+
 		if msg.Type == "PICK_TILES" {
 			var p struct {
 				Code      string `json:"code"`
@@ -154,7 +167,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			json.Unmarshal(msg.Payload, &p)
 			
 			if room, ok := rooms[p.Code]; ok && room.State != nil {
-				if room.State.TurnPlayer != p.Player { roomsMu.Unlock(); continue }
+				if room.State.TurnPlayer != p.Player || room.State.Status == "GAME_OVER" { roomsMu.Unlock(); continue }
 
 				pickedCount := 0
 				
@@ -210,7 +223,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				// 4. CHECK END OF ROUND
+				// 4. CHECK END OF DRAFTING ROUND
 				isRoundOver := true
 				for _, f := range room.State.Factories {
 					if len(f) > 0 { isRoundOver = false; break }
@@ -222,15 +235,19 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if isRoundOver {
-					// Broadcast PRE-Scoring state
 					broadcastMessage(room, "GAME_UPDATE", room.State)
-					// Trigger ASYNC Scoring Sequence (The Juice)
 					go func(r *Room) {
-						time.Sleep(1500 * time.Millisecond) // The 1.5s Pause
+						time.Sleep(1500 * time.Millisecond) // The Juice Pause
 						r.mu.Lock()
 						scoreRound(r.State)
+						status := r.State.Status
 						r.mu.Unlock()
-						broadcastMessage(r, "GAME_UPDATE", r.State)
+						
+						if status == "GAME_OVER" {
+							broadcastMessage(r, "GAME_OVER", r.State)
+						} else {
+							broadcastMessage(r, "GAME_UPDATE", r.State)
+						}
 					}(room)
 				} else {
 					broadcastMessage(room, "GAME_UPDATE", room.State)
@@ -242,7 +259,24 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SCORING ENGINE
+// SPRINT 9: THE TILE ECONOMY
+func drawTiles(state *GameState, count int) []string {
+	drawn := []string{}
+	for i := 0; i < count; i++ {
+		if len(state.Bag) == 0 {
+			if len(state.Discard) == 0 { break } // Board is completely tapped out
+			state.Bag = append(state.Bag, state.Discard...)
+			state.Discard = []string{}
+			rand.Shuffle(len(state.Bag), func(a, b int) { state.Bag[a], state.Bag[b] = state.Bag[b], state.Bag[a] })
+		}
+		tile := state.Bag[len(state.Bag)-1]
+		state.Bag = state.Bag[:len(state.Bag)-1]
+		drawn = append(drawn, tile)
+	}
+	return drawn
+}
+
+// SPRINT 8: COMPLEX MATH SCORING
 func scoreRound(state *GameState) {
 	wallPattern := [][]string{
 		{"blue", "yellow", "red", "black", "white"},
@@ -257,7 +291,9 @@ func scoreRound(state *GameState) {
 		for i, tile := range board.FloorLine {
 			if tile == "first_player" {
 				state.TurnPlayer = pName
-			}
+			} else {
+                state.Discard = append(state.Discard, tile) // SPRINT 9: To Discard
+            }
 			if i < len(penalties) { board.Score += penalties[i] } else { board.Score -= 3 }
 		}
 		if board.Score < 0 { board.Score = 0 }
@@ -271,24 +307,72 @@ func scoreRound(state *GameState) {
 				color = board.PatternLines[r][c]
 			}
 			if isFull && color != "" {
+                targetC := -1
 				for c := 0; c < 5; c++ {
-					if wallPattern[r][c] == color {
-						board.Wall[r][c] = color
-						board.Score += 1 // Simple scoring (Full contiguous path logic to be added in Phase 3)
-						break
-					}
+					if wallPattern[r][c] == color { targetC = c; break }
 				}
+                if targetC != -1 {
+                    board.Wall[r][targetC] = color
+                    
+                    // COMPLEX CONTIGUOUS SCORING
+                    hScore := 1
+                    for j := targetC - 1; j >= 0 && board.Wall[r][j] != ""; j-- { hScore++ }
+                    for j := targetC + 1; j < 5 && board.Wall[r][j] != ""; j++ { hScore++ }
+                    vScore := 1
+                    for i := r - 1; i >= 0 && board.Wall[i][targetC] != ""; i-- { vScore++ }
+                    for i := r + 1; i < 5 && board.Wall[i][targetC] != ""; i++ { vScore++ }
+
+                    if hScore > 1 && vScore > 1 { board.Score += hScore + vScore } else if hScore > 1 { board.Score += hScore } else if vScore > 1 { board.Score += vScore } else { board.Score += 1 }
+                }
+                
+                // Clear pattern line and send rest to discard
+                for i := 0; i < r; i++ { state.Discard = append(state.Discard, color) }
 				for c := 0; c <= r; c++ { board.PatternLines[r][c] = "" }
 			}
 		}
 	}
 	
-	// REPOPULATE KILNS
-	colors := []string{"blue", "yellow", "red", "black", "white"}
+    // ENDGAME TRIGGER CHECK
+    gameIsOver := false
+    for _, b := range state.Boards {
+        for r := 0; r < 5; r++ {
+            rowComplete := true
+            for c := 0; c < 5; c++ { if b.Wall[r][c] == "" { rowComplete = false; break } }
+            if rowComplete { gameIsOver = true; break }
+        }
+    }
+
+    if gameIsOver {
+        state.Status = "GAME_OVER"
+        for _, b := range state.Boards {
+            // Horiz +2
+            for r := 0; r < 5; r++ {
+                comp := true
+                for c := 0; c < 5; c++ { if b.Wall[r][c] == "" { comp = false; break } }
+                if comp { b.Score += 2 }
+            }
+            // Vert +7
+            for c := 0; c < 5; c++ {
+                comp := true
+                for r := 0; r < 5; r++ { if b.Wall[r][c] == "" { comp = false; break } }
+                if comp { b.Score += 7 }
+            }
+            // Color +10
+            colors := []string{"blue", "yellow", "red", "black", "white"}
+            for _, color := range colors {
+                count := 0
+                for r := 0; r < 5; r++ {
+                    for c := 0; c < 5; c++ { if b.Wall[r][c] == color { count++ } }
+                }
+                if count == 5 { b.Score += 10 }
+            }
+        }
+        return // End round immediately
+    }
+
+	// REPOPULATE KILNS FROM BAG
 	for i := 0; i < len(state.Factories); i++ {
-		tileGroup := []string{}
-		for j := 0; j < 4; j++ { tileGroup = append(tileGroup, colors[rand.Intn(len(colors))]) }
-		state.Factories[i] = tileGroup
+		state.Factories[i] = drawTiles(state, 4)
 	}
 	state.CenterHasFirstPlayer = true
 	state.Center = []string{"first_player"}
@@ -300,13 +384,12 @@ func generateCode() string {
 }
 
 func generateInitialState(players []string) *GameState {
+    bag := make([]string, 0, 100)
 	colors := []string{"blue", "yellow", "red", "black", "white"}
-	factories := make([][]string, 5)
-	for i := 0; i < 5; i++ {
-		tileGroup := []string{}
-		for j := 0; j < 4; j++ { tileGroup = append(tileGroup, colors[rand.Intn(len(colors))]) }
-		factories[i] = tileGroup
-	}
+    for _, c := range colors {
+        for i := 0; i < 20; i++ { bag = append(bag, c) }
+    }
+    rand.Shuffle(len(bag), func(i, j int) { bag[i], bag[j] = bag[j], bag[i] })
 
 	boards := make(map[string]*PlayerBoard)
 	for _, pName := range players {
@@ -323,13 +406,19 @@ func generateInitialState(players []string) *GameState {
 		boards[pName] = &PlayerBoard{Score: 0, PatternLines: pattern, Wall: wall, FloorLine: []string{}}
 	}
 
-	return &GameState{
-		Factories:            factories,
+	state := &GameState{
+		Factories:            make([][]string, 5),
 		Center:               []string{"first_player"},
 		TurnPlayer:           players[0],
 		CenterHasFirstPlayer: true,
 		Boards:               boards,
+        Bag:                  bag,
+        Discard:              []string{},
+        Status:               "PLAYING",
 	}
+
+    for i := 0; i < 5; i++ { state.Factories[i] = drawTiles(state, 4) }
+    return state
 }
 
 func broadcastRoom(r *Room) {
