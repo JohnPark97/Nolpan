@@ -76,19 +76,39 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() { _sub.cancel(); super.dispose(); }
 
-  bool _isRowLegal(int rowIdx, String color) {
+  String _capitalize(String s) => s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1)}' : s;
+
+  // SPRINT 8: THE VALIDATION ENGINE
+  String? _getPlacementError(int rowIdx, String color) {
+    if (rowIdx == -1) return null; // Edge Case 5: Direct to penalty is always allowed
+
     String myName = socketService.playerName ?? "";
     Map<String, dynamic> myBoard = boards![myName] ?? {};
     List wall = myBoard['wall'] ?? [];
     List patternLines = myBoard['pattern_lines'] ?? [];
-    if (rowIdx == -1) return true; 
+
+    // Edge Case 2: Wall Collision
     for (int col = 0; col < 5; col++) {
-      if (wall.length > rowIdx && wall[rowIdx].length > col && wall[rowIdx][col] == color) return false;
+      if (wall.length > rowIdx && wall[rowIdx].length > col && wall[rowIdx][col] == color) {
+        return "You've already built a ${_capitalize(color)} tile in that row!";
+      }
     }
+
     if (patternLines.length > rowIdx) {
-      for (var t in patternLines[rowIdx]) { if (t != "" && t != color) return false; }
+      // Edge Case 1: Color Mismatch
+      for (var t in patternLines[rowIdx]) {
+        if (t != "" && t != color) {
+          return "Hold up, boss! That row is already holding another color.";
+        }
+      }
+      // Edge Case 3: Full Pattern Lines
+      int emptySlots = (patternLines[rowIdx] as List).where((s) => s == "").length;
+      if (emptySlots == 0) {
+        return "That row is completely full!";
+      }
     }
-    return true;
+
+    return null; // Legal
   }
 
   void _flyTile(GlobalKey startKey, GlobalKey endKey, String color, VoidCallback onComplete) {
@@ -207,7 +227,7 @@ class _GameScreenState extends State<GameScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(isMyTurn ? "YOUR TURN" : "OPPONENT'S TURN", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: tTeal, letterSpacing: 2)),
-                      IconButton(icon: const Icon(Icons.settings, color: Colors.transparent, size: 24), onPressed: null), // Spacer
+                      IconButton(icon: const Icon(Icons.settings, color: Colors.transparent, size: 24), onPressed: null),
                     ],
                   ),
                 ),
@@ -221,6 +241,7 @@ class _GameScreenState extends State<GameScreen> {
                       var board = boards![opp] ?? {};
                       List oppWall = board['wall'] ?? [];
                       List oppFloor = board['floor_line'] ?? [];
+                      List oppPattern = board['pattern_lines'] ?? [];
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
@@ -228,16 +249,31 @@ class _GameScreenState extends State<GameScreen> {
                             CircleAvatar(radius: 10, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 8, color: Colors.white))),
                             const SizedBox(width: 8),
                             Expanded(child: Text(opp, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                            Column(
+                            Row(
                               mainAxisSize: MainAxisSize.min,
-                              children: List.generate(5, (r) => Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: List.generate(5, (c) {
-                                  String tile = (oppWall.length > r && oppWall[r].length > c) ? oppWall[r][c] : "";
-                                  Color bg = tile != "" ? _getBaseColor(tile) : _getBaseColor(wallPattern[r][c]).withOpacity(0.1);
-                                  return Container(margin: const EdgeInsets.all(0.5), width: 5, height: 5, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(1)));
-                                })
-                              )),
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: List.generate(5, (r) => Row(
+                                    children: List.generate(r + 1, (c) {
+                                      String tile = (oppPattern.length > r && oppPattern[r].length > c) ? oppPattern[r][c] : "";
+                                      return Container(margin: const EdgeInsets.all(0.5), width: 5, height: 5, decoration: BoxDecoration(color: tile == "" ? Colors.grey[200] : _getBaseColor(tile), borderRadius: BorderRadius.circular(1)));
+                                    })
+                                  ))
+                                ),
+                                const SizedBox(width: 8),
+                                Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: List.generate(5, (r) => Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: List.generate(5, (c) {
+                                      String tile = (oppWall.length > r && oppWall[r].length > c) ? oppWall[r][c] : "";
+                                      Color bg = tile != "" ? _getBaseColor(tile) : _getBaseColor(wallPattern[r][c]).withOpacity(0.1);
+                                      return Container(margin: const EdgeInsets.all(0.5), width: 5, height: 5, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(1)));
+                                    })
+                                  )),
+                                ),
+                              ]
                             ),
                             const SizedBox(width: 12),
                             Row(children: List.generate(oppFloor.length.clamp(0, 7), (i) => Container(margin: const EdgeInsets.only(right: 2), width: 3, height: 3, decoration: const BoxDecoration(color: tTerra, shape: BoxShape.circle)))),
@@ -313,10 +349,25 @@ class _GameScreenState extends State<GameScreen> {
                         child: Column(
                           children: [
                             ...List.generate(5, (rIdx) {
-                              bool isLegal = heldColor != null && _isRowLegal(rIdx, heldColor!);
+                              String? errorMsg = heldColor != null ? _getPlacementError(rIdx, heldColor!) : null;
+                              bool isLegal = heldColor != null && errorMsg == null;
                               bool isHovered = hoveredRow == rIdx;
+                              
                               return GestureDetector(
-                                onTap: isLegal ? () => _commitTurn(rIdx) : null,
+                                onTap: heldColor != null ? () {
+                                  if (isLegal) {
+                                    _commitTurn(rIdx);
+                                  } else {
+                                    HapticFeedback.vibrate();
+                                    ScaffoldMessenger.of(context).clearSnackBars();
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      content: Text(errorMsg!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      backgroundColor: tTerra,
+                                      behavior: SnackBarBehavior.floating,
+                                      duration: const Duration(seconds: 2),
+                                    ));
+                                  }
+                                } : null,
                                 onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
                                 child: Container(
                                   key: patternRowKeys[rIdx],
