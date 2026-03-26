@@ -171,7 +171,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				pickedCount := 0
 				board := room.State.Boards[p.Player]
 				
-                // EDGE CASE 6 HELPER: Strict Floor Cap
                 addToFloor := func(c string) {
                     if len(board.FloorLine) < 7 {
                         board.FloorLine = append(board.FloorLine, c)
@@ -180,7 +179,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
                     }
                 }
 
-				// 1. DRAFT TILES
 				if p.KilnIdx >= 0 && p.KilnIdx < len(room.State.Factories) {
 					for _, tile := range room.State.Factories[p.KilnIdx] {
 						if tile == p.Color { pickedCount++ } else { room.State.Center = append(room.State.Center, tile) }
@@ -200,11 +198,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					room.State.Center = newCenter
 				}
 
-				// 2. PLACE TILES
 				if p.TargetRow >= 0 && p.TargetRow < 5 {
 					emptySlots := 0
 					for _, slot := range board.PatternLines[p.TargetRow] { if slot == "" { emptySlots++ } }
-					
 					for i := 0; i < pickedCount; i++ {
 						if emptySlots > 0 {
 							for j := 0; j < len(board.PatternLines[p.TargetRow]); j++ {
@@ -219,11 +215,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 				} else {
-                    // EDGE CASE 5: Direct to Penalty
 					for i := 0; i < pickedCount; i++ { addToFloor(p.Color) }
 				}
 
-				// 3. PASS TURN
 				for i, name := range room.Players {
 					if name == p.Player {
 						nextIdx := (i + 1) % len(room.Players)
@@ -232,7 +226,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				// 4. CHECK END OF DRAFTING ROUND
 				isRoundOver := true
 				for _, f := range room.State.Factories {
 					if len(f) > 0 { isRoundOver = false; break }
@@ -246,7 +239,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				if isRoundOver {
 					broadcastMessage(room, "GAME_UPDATE", room.State)
 					go func(r *Room) {
-						time.Sleep(1500 * time.Millisecond) // The Juice Pause
+						time.Sleep(100 * time.Millisecond) // REMOVED DELAY - Let Frontend Animate
 						r.mu.Lock()
 						scoreRound(r.State)
 						status := r.State.Status
