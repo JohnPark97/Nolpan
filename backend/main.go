@@ -24,8 +24,8 @@ type GameState struct {
 	TurnPlayer           string                  `json:"turn_player"`
 	CenterHasFirstPlayer bool                    `json:"center_has_first_player"`
 	Boards               map[string]*PlayerBoard `json:"boards"`
-	Bag                  []string                `json:"-"` // Hidden from client
-	Discard              []string                `json:"-"` // Hidden from client
+	Bag                  []string                `json:"-"`
+	Discard              []string                `json:"-"`
 	Status               string                  `json:"status"`
 }
 
@@ -146,12 +146,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-        // SPRINT 10: PLAY AGAIN LOGIC
 		if msg.Type == "PLAY_AGAIN" {
 			var p struct{ Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
 			if room, ok := rooms[p.Code]; ok {
-				room.State = nil // Wipe game state
+				room.State = nil 
 				broadcastMessage(room, "RETURN_TO_LOBBY", map[string]interface{}{"code": room.Code, "players": room.Players})
 			}
 		}
@@ -170,7 +169,17 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				if room.State.TurnPlayer != p.Player || room.State.Status == "GAME_OVER" { roomsMu.Unlock(); continue }
 
 				pickedCount := 0
+				board := room.State.Boards[p.Player]
 				
+                // EDGE CASE 6 HELPER: Strict Floor Cap
+                addToFloor := func(c string) {
+                    if len(board.FloorLine) < 7 {
+                        board.FloorLine = append(board.FloorLine, c)
+                    } else {
+                        room.State.Discard = append(room.State.Discard, c)
+                    }
+                }
+
 				// 1. DRAFT TILES
 				if p.KilnIdx >= 0 && p.KilnIdx < len(room.State.Factories) {
 					for _, tile := range room.State.Factories[p.KilnIdx] {
@@ -183,7 +192,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 						if tile == p.Color {
 							pickedCount++
 						} else if tile == "first_player" {
-							room.State.Boards[p.Player].FloorLine = append(room.State.Boards[p.Player].FloorLine, "first_player")
+							addToFloor("first_player")
 						} else {
 							newCenter = append(newCenter, tile)
 						}
@@ -192,7 +201,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				}
 
 				// 2. PLACE TILES
-				board := room.State.Boards[p.Player]
 				if p.TargetRow >= 0 && p.TargetRow < 5 {
 					emptySlots := 0
 					for _, slot := range board.PatternLines[p.TargetRow] { if slot == "" { emptySlots++ } }
@@ -207,11 +215,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 								}
 							}
 						} else {
-							board.FloorLine = append(board.FloorLine, p.Color)
+							addToFloor(p.Color)
 						}
 					}
 				} else {
-					for i := 0; i < pickedCount; i++ { board.FloorLine = append(board.FloorLine, p.Color) }
+                    // EDGE CASE 5: Direct to Penalty
+					for i := 0; i < pickedCount; i++ { addToFloor(p.Color) }
 				}
 
 				// 3. PASS TURN
@@ -259,12 +268,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SPRINT 9: THE TILE ECONOMY
 func drawTiles(state *GameState, count int) []string {
 	drawn := []string{}
 	for i := 0; i < count; i++ {
 		if len(state.Bag) == 0 {
-			if len(state.Discard) == 0 { break } // Board is completely tapped out
+			if len(state.Discard) == 0 { break }
 			state.Bag = append(state.Bag, state.Discard...)
 			state.Discard = []string{}
 			rand.Shuffle(len(state.Bag), func(a, b int) { state.Bag[a], state.Bag[b] = state.Bag[b], state.Bag[a] })
@@ -276,7 +284,6 @@ func drawTiles(state *GameState, count int) []string {
 	return drawn
 }
 
-// SPRINT 8: COMPLEX MATH SCORING
 func scoreRound(state *GameState) {
 	wallPattern := [][]string{
 		{"blue", "yellow", "red", "black", "white"},
@@ -292,7 +299,7 @@ func scoreRound(state *GameState) {
 			if tile == "first_player" {
 				state.TurnPlayer = pName
 			} else {
-                state.Discard = append(state.Discard, tile) // SPRINT 9: To Discard
+                state.Discard = append(state.Discard, tile)
             }
 			if i < len(penalties) { board.Score += penalties[i] } else { board.Score -= 3 }
 		}
@@ -313,8 +320,6 @@ func scoreRound(state *GameState) {
 				}
                 if targetC != -1 {
                     board.Wall[r][targetC] = color
-                    
-                    // COMPLEX CONTIGUOUS SCORING
                     hScore := 1
                     for j := targetC - 1; j >= 0 && board.Wall[r][j] != ""; j-- { hScore++ }
                     for j := targetC + 1; j < 5 && board.Wall[r][j] != ""; j++ { hScore++ }
@@ -324,15 +329,12 @@ func scoreRound(state *GameState) {
 
                     if hScore > 1 && vScore > 1 { board.Score += hScore + vScore } else if hScore > 1 { board.Score += hScore } else if vScore > 1 { board.Score += vScore } else { board.Score += 1 }
                 }
-                
-                // Clear pattern line and send rest to discard
                 for i := 0; i < r; i++ { state.Discard = append(state.Discard, color) }
 				for c := 0; c <= r; c++ { board.PatternLines[r][c] = "" }
 			}
 		}
 	}
 	
-    // ENDGAME TRIGGER CHECK
     gameIsOver := false
     for _, b := range state.Boards {
         for r := 0; r < 5; r++ {
@@ -345,19 +347,16 @@ func scoreRound(state *GameState) {
     if gameIsOver {
         state.Status = "GAME_OVER"
         for _, b := range state.Boards {
-            // Horiz +2
             for r := 0; r < 5; r++ {
                 comp := true
                 for c := 0; c < 5; c++ { if b.Wall[r][c] == "" { comp = false; break } }
                 if comp { b.Score += 2 }
             }
-            // Vert +7
             for c := 0; c < 5; c++ {
                 comp := true
                 for r := 0; r < 5; r++ { if b.Wall[r][c] == "" { comp = false; break } }
                 if comp { b.Score += 7 }
             }
-            // Color +10
             colors := []string{"blue", "yellow", "red", "black", "white"}
             for _, color := range colors {
                 count := 0
@@ -367,10 +366,9 @@ func scoreRound(state *GameState) {
                 if count == 5 { b.Score += 10 }
             }
         }
-        return // End round immediately
+        return
     }
 
-	// REPOPULATE KILNS FROM BAG
 	for i := 0; i < len(state.Factories); i++ {
 		state.Factories[i] = drawTiles(state, 4)
 	}
