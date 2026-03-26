@@ -22,6 +22,7 @@ type GameState struct {
 	Factories             [][]string              `json:"factories"`
 	Center                []string                `json:"center"`
 	TurnPlayer            string                  `json:"turn_player"`
+	CenterHasFirstPlayer  bool                    `json:"center_has_first_player"`
 	Boards                map[string]*PlayerBoard `json:"boards"`
 }
 
@@ -209,12 +210,88 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				broadcastMessage(room, "GAME_UPDATE", room.State)
+				// 4. CHECK END OF ROUND
+				isRoundOver := true
+				for _, f := range room.State.Factories {
+					if len(f) > 0 { isRoundOver = false; break }
+				}
+				if isRoundOver {
+					for _, t := range room.State.Center {
+						if t != "first_player" { isRoundOver = false; break }
+					}
+				}
+
+				if isRoundOver {
+					// Broadcast PRE-Scoring state
+					broadcastMessage(room, "GAME_UPDATE", room.State)
+					// Trigger ASYNC Scoring Sequence (The Juice)
+					go func(r *Room) {
+						time.Sleep(1500 * time.Millisecond) // The 1.5s Pause
+						r.mu.Lock()
+						scoreRound(r.State)
+						r.mu.Unlock()
+						broadcastMessage(r, "GAME_UPDATE", r.State)
+					}(room)
+				} else {
+					broadcastMessage(room, "GAME_UPDATE", room.State)
+				}
 			}
 		}
 
 		roomsMu.Unlock()
 	}
+}
+
+// SCORING ENGINE
+func scoreRound(state *GameState) {
+	wallPattern := [][]string{
+		{"blue", "yellow", "red", "black", "white"},
+		{"white", "blue", "yellow", "red", "black"},
+		{"black", "white", "blue", "yellow", "red"},
+		{"red", "black", "white", "blue", "yellow"},
+		{"yellow", "red", "black", "white", "blue"},
+	}
+	penalties := []int{-1, -1, -2, -2, -2, -3, -3}
+	
+	for pName, board := range state.Boards {
+		for i, tile := range board.FloorLine {
+			if tile == "first_player" {
+				state.TurnPlayer = pName
+			}
+			if i < len(penalties) { board.Score += penalties[i] } else { board.Score -= 3 }
+		}
+		if board.Score < 0 { board.Score = 0 }
+		board.FloorLine = []string{}
+		
+		for r := 0; r < 5; r++ {
+			isFull := true
+			color := ""
+			for c := 0; c <= r; c++ {
+				if board.PatternLines[r][c] == "" { isFull = false; break }
+				color = board.PatternLines[r][c]
+			}
+			if isFull && color != "" {
+				for c := 0; c < 5; c++ {
+					if wallPattern[r][c] == color {
+						board.Wall[r][c] = color
+						board.Score += 1 // Simple scoring (Full contiguous path logic to be added in Phase 3)
+						break
+					}
+				}
+				for c := 0; c <= r; c++ { board.PatternLines[r][c] = "" }
+			}
+		}
+	}
+	
+	// REPOPULATE KILNS
+	colors := []string{"blue", "yellow", "red", "black", "white"}
+	for i := 0; i < len(state.Factories); i++ {
+		tileGroup := []string{}
+		for j := 0; j < 4; j++ { tileGroup = append(tileGroup, colors[rand.Intn(len(colors))]) }
+		state.Factories[i] = tileGroup
+	}
+	state.CenterHasFirstPlayer = true
+	state.Center = []string{"first_player"}
 }
 
 func generateCode() string {
@@ -247,10 +324,11 @@ func generateInitialState(players []string) *GameState {
 	}
 
 	return &GameState{
-		Factories:  factories,
-		Center:     []string{"first_player"}, // FIX 1: Seed the First Player Token
-		TurnPlayer: players[0],
-		Boards:     boards,
+		Factories:            factories,
+		Center:               []string{"first_player"},
+		TurnPlayer:           players[0],
+		CenterHasFirstPlayer: true,
+		Boards:               boards,
 	}
 }
 
