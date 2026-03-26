@@ -59,7 +59,7 @@ class _GameScreenState extends State<GameScreen> {
     List wall = myBoard['wall'] ?? [];
     List patternLines = myBoard['pattern_lines'] ?? [];
 
-    if (rowIdx == -1) return true; // Floor line always legal
+    if (rowIdx == -1) return true; 
 
     for (int col = 0; col < 5; col++) {
       if (wall.length > rowIdx && wall[rowIdx].length > col && wall[rowIdx][col] == color) return false;
@@ -79,7 +79,7 @@ class _GameScreenState extends State<GameScreen> {
         'color': heldColor,
         'target_row': selectedRow
       });
-      setState(() { heldColor = null; selectedRow = null; }); 
+      setState(() { heldColor = null; selectedRow = null; heldKilnIdx = null; }); 
     }
   }
 
@@ -94,7 +94,6 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  // --- RESPONSIVE TILE BUILDER ---
   Widget _buildTile(String colorName, {double size = 20, double opacity = 1.0, bool isGhost = false, bool empty = false, double scale = 1.0}) {
     if (empty) {
       return Container(width: size, height: size, margin: const EdgeInsets.all(1.5), decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)));
@@ -128,7 +127,6 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  // --- ZONE 1: OPPONENTS ---
   Widget _buildOpponentZone(String myName, List<String> opponents) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16), padding: const EdgeInsets.all(12),
@@ -148,7 +146,6 @@ class _GameScreenState extends State<GameScreen> {
                     CircleAvatar(radius: 14, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white))),
                     const SizedBox(width: 12),
                     Expanded(child: Text(opp, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tInk))),
-                    // 5x5 Heatmap Wall
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: List.generate(5, (r) => Row(
@@ -160,7 +157,6 @@ class _GameScreenState extends State<GameScreen> {
                       )),
                     ),
                     const SizedBox(width: 12),
-                    // Penalty Dots
                     Row(children: List.generate(oppFloor.length.clamp(0, 7), (i) => Container(margin: const EdgeInsets.only(right: 2), width: 4, height: 4, decoration: const BoxDecoration(color: tTerra, shape: BoxShape.circle)))),
                     const SizedBox(width: 12),
                     Text("${oppBoard['score'] ?? 0}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: tInk)),
@@ -184,7 +180,6 @@ class _GameScreenState extends State<GameScreen> {
     List floor = myBoard['floor_line'] ?? [];
     List<String> opponents = boards!.keys.where((k) => k != myName).toList();
     
-    // Spec 4: Shatter line texts
     const List<String> shatterPenalties = ['-1', '-1', '-2', '-2', '-2', '-3', '-3'];
 
     return Scaffold(
@@ -194,7 +189,6 @@ class _GameScreenState extends State<GameScreen> {
           children: [
             Column(
               children: [
-                // HEADER
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
@@ -213,10 +207,8 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 ),
 
-                // ZONE 1: OPPONENTS (Top 30%)
                 Expanded(flex: 3, child: _buildOpponentZone(myName, opponents)),
 
-                // ZONE 2: MARKET (Middle 30%)
                 Expanded(flex: 3, child: Opacity(
                   opacity: isMyTurn ? 1.0 : 0.5,
                   child: IgnorePointer(
@@ -224,7 +216,6 @@ class _GameScreenState extends State<GameScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // SPEC 3: ENLARGED KILNS (flex-wrap to 2 rows)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Wrap(
@@ -243,11 +234,11 @@ class _GameScreenState extends State<GameScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        // SPEC 4: RECESSED CENTER POOL
                         GestureDetector(
                           onTap: () => heldColor != null ? setState(() => heldColor = null) : null,
                           child: Container(
-                            minHeight: 56, width: 260, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            constraints: const BoxConstraints(minHeight: 56), // THE FIX: Proper constraints wrapper!
+                            width: 260, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             decoration: BoxDecoration(color: Colors.black.withOpacity(0.04), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.black.withOpacity(0.05))),
                             child: Center(child: center!.isEmpty ? const Text("CENTER POOL", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.grey)) : Wrap(spacing: 4, runSpacing: 4, children: center!.map((c) => GestureDetector(
                               onTap: () => setState(() { heldColor = c; heldKilnIdx = -1; heldCount = center!.where((t) => t == c).length; }),
@@ -260,7 +251,6 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 )),
 
-                // ZONE 3: WORKSHOP (Bottom 40%)
                 Expanded(flex: 4, child: Container(
                   color: Colors.white, padding: const EdgeInsets.all(16),
                   child: Column(
@@ -271,12 +261,10 @@ class _GameScreenState extends State<GameScreen> {
                       ]),
                       const SizedBox(height: 12),
                       
-                      // SPEC 2: ALIGNED STAIRCASE AND WALL
                       Expanded(child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // Left: Pattern Lines
                           Column(
                             mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end,
                             children: List.generate(5, (rIdx) {
@@ -295,10 +283,10 @@ class _GameScreenState extends State<GameScreen> {
                                       if (isSelected && isLegal && heldCount != null) {
                                          int emptySlots = (patternLines[rIdx] as List).where((s) => s == "").length;
                                          int rowLen = (patternLines[rIdx] as List).length;
-                                         int slotIndex = (cIdx - (rowLen - emptySlots)).toInt();
+                                         int slotIndex = (cIdx - (rowLen - emptySlots)).toInt(); // THE FIX: Explicit cast to integer
                                          if (slotIndex >= 0 && slotIndex < heldCount!) return _buildTile(heldColor!, size: 20, isGhost: true);
                                       }
-                                      return _buildTile("", size: 20, empty: true);
+                                      return _buildTile("", size: 20, empty: true); // THE FIX: Restored empty flag
                                     }),
                                   ),
                                 ),
@@ -306,7 +294,6 @@ class _GameScreenState extends State<GameScreen> {
                             }),
                           ),
                           const SizedBox(width: 16),
-                          // Right: 5x5 Wall
                           Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: List.generate(5, (r) => Row(
@@ -321,7 +308,6 @@ class _GameScreenState extends State<GameScreen> {
                       )),
                       const SizedBox(height: 8),
                       
-                      // SPEC 4: SHATTER LINE WITH PENALTY TEXT
                       GestureDetector(
                         onTap: (heldColor != null) ? () => setState(() => selectedRow = -1) : null,
                         child: Container(
@@ -331,7 +317,6 @@ class _GameScreenState extends State<GameScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: List.generate(7, (i) {
                               String t = i < floor.length ? floor[i] : "";
-                              // Show ghosts if placing on floor
                               if (selectedRow == -1 && heldColor != null && heldCount != null) {
                                 int emptyIdx = i - floor.length;
                                 if (emptyIdx >= 0 && emptyIdx < heldCount!) t = heldColor!;
@@ -353,7 +338,6 @@ class _GameScreenState extends State<GameScreen> {
                       ),
                       const SizedBox(height: 12),
                       
-                      // MAIN BUTTON
                       PhysicsButton(
                         text: heldColor != null && selectedRow != null ? "COMMIT TURN" : "SELECT TILES",
                         color: heldColor != null && selectedRow != null ? tTeal : Colors.grey[400]!,
