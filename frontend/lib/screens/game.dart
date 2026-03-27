@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import '../main.dart';
+import 'victory.dart';
 import 'lobby.dart';
 
 const List<List<String>> wallPattern = [
@@ -42,7 +43,6 @@ class _GameScreenState extends State<GameScreen> {
   bool _showPop = false;
   bool _showShatter = false;
 
-  // SPRINT 10: Victory Flow Flags
   bool _isGameOver = false;
   bool _isReviewingBoard = false;
 
@@ -257,10 +257,14 @@ class _GameScreenState extends State<GameScreen> {
       ),
     );
     
-    return tile;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (Widget child, Animation<double> animation) => ScaleTransition(scale: animation, child: child),
+      child: Container(key: ValueKey(colorName + empty.toString() + isGhost.toString()), child: tile),
+    );
   }
 
-  // SPRINT 10: END-GAME BONUS TRACKER UI
+  // FIX 1: SIMPLIFIED BONUS TRACKERS
   Widget _buildBonusTrackers(List wall, {bool isOpp = false}) {
     int rows = 0; int cols = 0; int colors = 0;
     if (wall.isNotEmpty) {
@@ -281,13 +285,15 @@ class _GameScreenState extends State<GameScreen> {
     double sz = isOpp ? 10 : 16;
     double fz = isOpp ? 10 : 14;
     return Padding(
-      padding: EdgeInsets.only(top: isOpp ? 4 : 12),
+      padding: EdgeInsets.only(top: isOpp ? 4 : 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.menu, size: sz, color: Colors.grey[400]), Text(" $rows/5 ", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
-          Icon(Icons.view_column, size: sz, color: Colors.grey[400]), Text(" $cols/5 ", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
-          Icon(Icons.diamond_outlined, size: sz, color: Colors.grey[400]), Text(" $colors/5", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          Icon(Icons.menu, size: sz, color: Colors.grey[400]), Text(" $rows", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          SizedBox(width: isOpp ? 6 : 12),
+          Icon(Icons.view_column, size: sz, color: Colors.grey[400]), Text(" $cols", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          SizedBox(width: isOpp ? 6 : 12),
+          Icon(Icons.diamond_outlined, size: sz, color: Colors.grey[400]), Text(" $colors", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
         ],
       )
     );
@@ -306,7 +312,6 @@ class _GameScreenState extends State<GameScreen> {
     List<String> opponents = boards!.keys.where((k) => k != myName).toList();
     const List<String> shatterPenalties = ['-1', '-1', '-2', '-2', '-2', '-3', '-3'];
 
-    // SPRINT 10: Victory Math Breakdown
     List<Map<String, dynamic>> finalScores = [];
     if (_isGameOver) {
       boards!.forEach((name, data) {
@@ -347,13 +352,13 @@ class _GameScreenState extends State<GameScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(isMyTurn ? "YOUR TURN" : "OPPONENT'S TURN", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: tTeal, letterSpacing: 2)),
-                      IconButton(icon: const Icon(Icons.settings, color: Colors.transparent, size: 24), onPressed: null), // Spacer
+                      IconButton(icon: const Icon(Icons.settings, color: Colors.transparent, size: 24), onPressed: null),
                     ],
                   ),
                 ),
 
-                // ZONE 1: OPPONENT BOARD
-                Expanded(flex: 2, child: Container(
+                // FIX 3: 4-PLAYER STRESS TEST & FLEX ALIGNMENT
+                Expanded(flex: 22, child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   child: opponents.isEmpty ? const Center(child: Text("WAITING FOR OPPONENTS...", style: TextStyle(fontSize: 10, color: Colors.grey))) : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -366,18 +371,24 @@ class _GameScreenState extends State<GameScreen> {
                       return Expanded(
                         child: Container(
                           margin: const EdgeInsets.symmetric(horizontal: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
                           child: Column(
                             children: [
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Row(children: [CircleAvatar(radius: 10, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))), const SizedBox(width: 6), Text(opp, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)]),
+                                  Expanded(
+                                    child: Row(children: [
+                                      CircleAvatar(radius: 10, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))), 
+                                      const SizedBox(width: 4), 
+                                      Expanded(child: Text(opp, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis))
+                                    ])
+                                  ),
                                   Text("${board['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)),
                                 ]
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               Expanded(
                                 child: FittedBox(
                                   fit: BoxFit.contain,
@@ -389,7 +400,6 @@ class _GameScreenState extends State<GameScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.end,
                                         children: List.generate(5, (r) => Row(
                                           children: List.generate(5, (cIdx) {
-                                            // FIX 2: Opponent Right-to-Left Packing logic applied
                                             if (cIdx < 4 - r) return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4); // Pad
                                             int slotIdx = cIdx - (4 - r);
                                             int capacity = r + 1;
@@ -431,7 +441,7 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 )),
 
-                Expanded(flex: 3, child: Opacity(
+                Expanded(flex: 33, child: Opacity(
                   opacity: isMyTurn ? 1.0 : 0.5,
                   child: IgnorePointer(
                     ignoring: !isMyTurn,
@@ -465,10 +475,10 @@ class _GameScreenState extends State<GameScreen> {
                         const SizedBox(height: 16),
                         Container(
                           key: centerKey,
-                          constraints: const BoxConstraints(minHeight: 80), width: double.infinity, margin: const EdgeInsets.symmetric(horizontal: 24),
+                          constraints: const BoxConstraints(minHeight: 64), width: double.infinity, margin: const EdgeInsets.symmetric(horizontal: 16),
                           decoration: BoxDecoration(color: const Color(0xFFE5E0D8), borderRadius: BorderRadius.circular(12), border: const Border(top: BorderSide(color: Colors.black12, width: 2))), 
                           child: Center(child: center!.isEmpty ? const Text("CENTER POOL", style: TextStyle(fontSize: 10, color: Colors.grey)) : Padding(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             child: Wrap(spacing: 4, runSpacing: 4, children: center!.map((c) => GestureDetector(
                               onTap: c == "first_player" ? null : () => setState(() { heldColor = c; heldKilnIdx = -1; heldCount = center!.where((t) => t == c).length; }),
                               child: _buildTile(c, size: 22, scale: (heldColor == c && heldKilnIdx == -1) ? 1.2 : 1.0)
@@ -480,157 +490,155 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 )),
 
-                Expanded(flex: 4, child: Container(
-                  color: Colors.white, padding: const EdgeInsets.all(16),
+                // FIX 2: STRICT VIEWPORT CONTAINMENT (FittedBox)
+                Expanded(flex: 45, child: Container(
+                  color: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Column(
                     children: [
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                         const Text("MY WORKSHOP", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
                         Text("SCORE: ${myBoard['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: tTeal)),
                       ]),
-                      const Spacer(),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // LEFT SIDE
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: List.generate(5, (rIdx) {
-                                        String? errorMsg = heldColor != null ? _getPlacementError(rIdx, heldColor!) : null;
-                                        bool isLegal = heldColor != null && errorMsg == null;
-                                        bool isHovered = hoveredRow == rIdx;
-                                        
-                                        return GestureDetector(
-                                          onTap: heldColor != null ? () {
-                                            if (isLegal) _commitTurn(rIdx);
-                                            else { HapticFeedback.vibrate(); ScaffoldMessenger.of(context).clearSnackBars(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: tTerra, behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2))); }
-                                          } : null,
-                                          onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
-                                          child: Container(
-                                            key: patternRowKeys[rIdx],
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.contain, // This strictly prevents vertical overflow!
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: List.generate(5, (rIdx) {
+                                          String? errorMsg = heldColor != null ? _getPlacementError(rIdx, heldColor!) : null;
+                                          bool isLegal = heldColor != null && errorMsg == null;
+                                          bool isHovered = hoveredRow == rIdx;
+                                          
+                                          return GestureDetector(
+                                            onTap: heldColor != null ? () {
+                                              if (isLegal) _commitTurn(rIdx);
+                                              else { HapticFeedback.vibrate(); ScaffoldMessenger.of(context).clearSnackBars(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: tTerra, behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2))); }
+                                            } : null,
+                                            onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
+                                            child: Container(
+                                              key: patternRowKeys[rIdx],
+                                              margin: const EdgeInsets.symmetric(vertical: 2),
+                                              color: Colors.transparent,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: List.generate(5, (cIdx) {
+                                                  if (cIdx < 4 - rIdx) return Container(width: 24, height: 24, margin: const EdgeInsets.all(1.5)); 
+                                                  int slotIdx = cIdx - (4 - rIdx);
+                                                  int capacity = rIdx + 1;
+                                                  int filled = (patternLines[rIdx] as List).where((s) => s != "").length;
+                                                  String rowColor = filled > 0 ? (patternLines[rIdx] as List).firstWhere((s) => s != "") : "";
+                                                  int emptyCount = capacity - filled;
+
+                                                  int ghostStart = emptyCount;
+                                                  if (isHovered && isLegal && heldCount != null) {
+                                                    ghostStart = emptyCount - heldCount!;
+                                                    if (ghostStart < 0) ghostStart = 0;
+                                                  }
+
+                                                  Widget tileW;
+                                                  if (slotIdx < ghostStart) tileW = _buildTile("", size: 24, empty: true);
+                                                  else if (slotIdx >= ghostStart && slotIdx < emptyCount) tileW = _buildTile(heldColor!, size: 24, isGhost: true);
+                                                  else tileW = _buildTile(rowColor, size: 24);
+
+                                                  bool isFullRow = (patternLines[rIdx] as List).where((s) => s == "").isEmpty;
+                                                  if (isFullRow) {
+                                                    if (_showSlide && slotIdx == rIdx) { 
+                                                      int targetC = wallPattern[rIdx].indexOf(rowColor);
+                                                      double distance = 24.0 + (targetC * 27.0); 
+                                                      tileW = AnimatedContainer(duration: const Duration(milliseconds: 800), curve: Curves.easeInOutCubic, transform: Matrix4.translationValues(distance, 0, 0), child: tileW);
+                                                    } else if (_showShatter && slotIdx < rIdx) { 
+                                                      tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
+                                                    }
+                                                  }
+                                                  return SizedBox(width: 27, height: 27, child: Stack(clipBehavior: Clip.none, alignment: Alignment.center, children: [Positioned(child: tileW)]));
+                                                }),
+                                              ),
+                                            ),
+                                          );
+                                        }),
+                                      )
+                                    ]
+                                  ),
+                                  const SizedBox(width: 24), 
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Column(
+                                        children: List.generate(5, (rIdx) {
+                                          return Container(
                                             margin: const EdgeInsets.symmetric(vertical: 2),
-                                            color: Colors.transparent,
                                             child: Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: List.generate(5, (cIdx) {
-                                                if (cIdx < 4 - rIdx) return Container(width: 24, height: 24, margin: const EdgeInsets.all(1.5)); 
-                                                int slotIdx = cIdx - (4 - rIdx);
-                                                int capacity = rIdx + 1;
-                                                int filled = (patternLines[rIdx] as List).where((s) => s != "").length;
-                                                String rowColor = filled > 0 ? (patternLines[rIdx] as List).firstWhere((s) => s != "") : "";
-                                                int emptyCount = capacity - filled;
-
-                                                int ghostStart = emptyCount;
-                                                if (isHovered && isLegal && heldCount != null) {
-                                                  ghostStart = emptyCount - heldCount!;
-                                                  if (ghostStart < 0) ghostStart = 0;
-                                                }
-
-                                                Widget tileW;
-                                                if (slotIdx < ghostStart) tileW = _buildTile("", size: 24, empty: true);
-                                                else if (slotIdx >= ghostStart && slotIdx < emptyCount) tileW = _buildTile(heldColor!, size: 24, isGhost: true);
-                                                else tileW = _buildTile(rowColor, size: 24);
-
-                                                bool isFullRow = (patternLines[rIdx] as List).where((s) => s == "").isEmpty;
-                                                if (isFullRow) {
-                                                  if (_showSlide && slotIdx == rIdx) { 
-                                                    int targetC = wallPattern[rIdx].indexOf(rowColor);
-                                                    double distance = 24.0 + (targetC * 27.0); // Exactly 27px per slot math
-                                                    tileW = AnimatedContainer(duration: const Duration(milliseconds: 800), curve: Curves.easeInOutCubic, transform: Matrix4.translationValues(distance, 0, 0), child: tileW);
-                                                  } else if (_showShatter && slotIdx < rIdx) { 
-                                                    tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
+                                                String t = (wall.length > rIdx && wall[rIdx].length > cIdx) ? wall[rIdx][cIdx] : "";
+                                                Widget slotW = t != "" ? _buildTile(t, size: 24) : _buildTile(wallPattern[rIdx][cIdx], size: 24, isGhost: true);
+                                                
+                                                Widget floatText = const SizedBox.shrink();
+                                                if (_showPop && _scoringRows.contains(rIdx)) {
+                                                  String rColor = patternLines[rIdx][0];
+                                                  if (wallPattern[rIdx][cIdx] == rColor) {
+                                                    int pts = _incomingPayload?['last_scored']?[myName]?[rIdx.toString()] ?? 1;
+                                                    floatText = TweenAnimationBuilder<double>(
+                                                      tween: Tween(begin: 0.0, end: 1.0), duration: const Duration(milliseconds: 800), curve: Curves.easeOutCubic,
+                                                      builder: (context, val, child) {
+                                                        return Transform.translate(offset: Offset(0, -30 * val), child: Opacity(opacity: 1.0 - val, child: Text("+$pts", style: const TextStyle(color: tGold, fontSize: 24, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black87, blurRadius: 4)]))));
+                                                      }
+                                                    );
                                                   }
                                                 }
-                                                // FIX 1: Absolute Sizing forces Flexbox to never shift
-                                                return SizedBox(width: 27, height: 27, child: Stack(clipBehavior: Clip.none, alignment: Alignment.center, children: [Positioned(child: tileW)]));
+                                                return SizedBox(width: 27, height: 27, child: Stack(clipBehavior: Clip.none, alignment: Alignment.center, children: [Positioned(child: slotW), Positioned(child: floatText)]));
                                               }),
                                             ),
-                                          ),
-                                        );
-                                      }),
-                                    )
-                                  ]
-                                ),
-                                const SizedBox(width: 24), // Strict Gap
-                                // RIGHT SIDE
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Column(
-                                      children: List.generate(5, (rIdx) {
-                                        return Container(
-                                          margin: const EdgeInsets.symmetric(vertical: 2),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: List.generate(5, (cIdx) {
-                                              String t = (wall.length > rIdx && wall[rIdx].length > cIdx) ? wall[rIdx][cIdx] : "";
-                                              Widget slotW = t != "" ? _buildTile(t, size: 24) : _buildTile(wallPattern[rIdx][cIdx], size: 24, isGhost: true);
-                                              
-                                              Widget floatText = const SizedBox.shrink();
-                                              if (_showPop && _scoringRows.contains(rIdx)) {
-                                                String rColor = patternLines[rIdx][0];
-                                                if (wallPattern[rIdx][cIdx] == rColor) {
-                                                  int pts = _incomingPayload?['last_scored']?[myName]?[rIdx.toString()] ?? 1;
-                                                  floatText = TweenAnimationBuilder<double>(
-                                                    tween: Tween(begin: 0.0, end: 1.0), duration: const Duration(milliseconds: 800), curve: Curves.easeOutCubic,
-                                                    builder: (context, val, child) {
-                                                      return Transform.translate(offset: Offset(0, -30 * val), child: Opacity(opacity: 1.0 - val, child: Text("+$pts", style: const TextStyle(color: tGold, fontSize: 24, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black87, blurRadius: 4)]))));
-                                                    }
-                                                  );
-                                                }
-                                              }
-                                              // FIX 1: Absolute Positioning for score pop
-                                              return SizedBox(width: 27, height: 27, child: Stack(clipBehavior: Clip.none, alignment: Alignment.center, children: [Positioned(child: slotW), Positioned(child: floatText)]));
-                                            }),
-                                          ),
-                                        );
-                                      }),
-                                    )
-                                  ]
-                                )
-                              ],
-                            ),
-                            const SizedBox(height: 24),
-                            GestureDetector(
-                              onTap: heldColor != null ? () => _commitTurn(-1) : null,
-                              onPanUpdate: (_) => setState(() => hoveredRow = -1),
-                              child: Container(
-                                key: floorKey, padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: hoveredRow == -1 ? tTeal : Colors.transparent, width: 2)),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: List.generate(7, (i) {
-                                    String t = i < floor.length ? floor[i] : "";
-                                    if (hoveredRow == -1 && heldColor != null && heldCount != null) { if (i - floor.length >= 0 && i - floor.length < heldCount!) t = heldColor!; }
-                                    
-                                    Widget tileW = _buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor);
-                                    if (_showShatter && t != "") {
-                                      tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
-                                    }
-                                    return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [SizedBox(width: 27, height: 27, child: Stack(alignment: Alignment.center, children:[Positioned(child: tileW)])), const SizedBox(height: 4), Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))]));
-                                  }),
+                                          );
+                                        }),
+                                      )
+                                    ]
+                                  )
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              GestureDetector(
+                                onTap: heldColor != null ? () => _commitTurn(-1) : null,
+                                onPanUpdate: (_) => setState(() => hoveredRow = -1),
+                                child: Container(
+                                  key: floorKey, padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: hoveredRow == -1 ? tTeal : Colors.transparent, width: 2)),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: List.generate(7, (i) {
+                                      String t = i < floor.length ? floor[i] : "";
+                                      if (hoveredRow == -1 && heldColor != null && heldCount != null) { if (i - floor.length >= 0 && i - floor.length < heldCount!) t = heldColor!; }
+                                      
+                                      Widget tileW = _buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor);
+                                      if (_showShatter && t != "") {
+                                        tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
+                                      }
+                                      return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [SizedBox(width: 27, height: 27, child: Stack(alignment: Alignment.center, children:[Positioned(child: tileW)])), const SizedBox(height: 4), Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))]));
+                                    }),
+                                  ),
                                 ),
                               ),
-                            ),
-                            _buildBonusTrackers(wall) // STRATEGY UI
-                          ],
+                              _buildBonusTrackers(wall) 
+                            ],
+                          ),
                         ),
                       ),
-                      const Spacer(),
                     ],
                   ),
                 )),
               ],
             ),
             
-            // SPRINT 10: VICTORY FLOW MODAL
             if (_isGameOver && !_isReviewingBoard)
               Positioned.fill(
                 child: Container(
