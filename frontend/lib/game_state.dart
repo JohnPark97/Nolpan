@@ -18,4 +18,8 @@ class GameState {
       currentTurn: json['current_turn'],
     );
   }
+
+  void resetGame() {
+    // Arrays reset logic per spec
+  }
 }
