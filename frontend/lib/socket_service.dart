@@ -13,7 +13,6 @@ class SocketService {
   Map<String, dynamic>? lastRoomUpdate;
   Timer? _heartbeat;
   
-  // THE FIX: Store Session Data
   String? playerName;
   String? currentRoomCode;
 
@@ -31,7 +30,6 @@ class SocketService {
     try {
       _channel = WebSocketChannel.connect(Uri.parse(_currentUrl!));
       
-      // THE FIX: If we lost connection, automatically ask the server for our session back!
       if (playerName != null && currentRoomCode != null) {
         Future.delayed(const Duration(milliseconds: 500), () {
           send('RECONNECT', {'name': playerName, 'code': currentRoomCode});
@@ -51,7 +49,7 @@ class SocketService {
           
           if (decoded['type'] == 'ROOM_UPDATE') { 
             lastRoomUpdate = decoded; 
-            currentRoomCode = decoded['payload']['code']; // Save for reconnect
+            currentRoomCode = decoded['payload']['code'];
           }
           _controller.add(decoded);
         },
