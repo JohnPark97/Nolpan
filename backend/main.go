@@ -150,10 +150,59 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		if msg.Type == "RETURN_TO_LOBBY" {
+			var p struct{ Code string `json:"code"` }
+			json.Unmarshal(msg.Payload, &p)
+			if room, ok := rooms[p.Code]; ok {
+				room.State = nil 
+				broadcastMessage(room, "RETURN_TO_LOBBY", map[string]interface{}{"code": room.Code, "players": room.Players})
+			}
+		}
+
+		if msg.Type == "PLAY_AGAIN" {
+			var p struct{ Code string `json:"code"` }
+			json.Unmarshal(msg.Payload, &p)
+			if room, ok := rooms[p.Code]; ok && room.State != nil {
+                state := room.State
+                bag := make([]string, 0, 100)
+                colors := []string{"blue", "yellow", "red", "black", "purple"}
+                for _, c := range colors {
+                    for i := 0; i < 20; i++ { bag = append(bag, c) }
+                }
+                rand.Shuffle(len(bag), func(i, j int) { bag[i], bag[j] = bag[j], bag[i] })
+                
+                state.Bag = bag
+                state.Discard = []string{}
+                state.Status = "PLAYING"
+                state.LastScored = make(map[string]map[string]int)
+                state.TurnPlayer = room.Players[0] 
+                
+                for _, pName := range room.Players {
+                    if b, exists := state.Boards[pName]; exists {
+                        b.Score = 0
+                        b.FloorLine = []string{}
+                        for r := 0; r < 5; r++ {
+                            for c := 0; c <= r; c++ { b.PatternLines[r][c] = "" }
+                            for c := 0; c < 5; c++ { b.Wall[r][c] = "" }
+                        }
+                    }
+                }
+                
+                for i := 0; i < 5; i++ { state.Factories[i] = drawTiles(state, 4) }
+                state.CenterHasFirstPlayer = true
+                state.Center = []string{"first_player"}
+                
+				broadcastMessage(room, "GAME_STARTED", state)
+			}
+		}
+
 		if msg.Type == "DRAFTING_INTENT" {
 			var p struct { Code string `json:"code"`; Name string `json:"name"`; Intent interface{} `json:"intent"` }
 			json.Unmarshal(msg.Payload, &p)
 			if room, ok := rooms[p.Code]; ok && room.State != nil {
+				if room.State.DraftingIntents == nil {
+					room.State.DraftingIntents = make(map[string]interface{})
+				}
 				room.State.DraftingIntents[p.Name] = p.Intent
 				broadcastMessage(room, "GAME_UPDATE", room.State)
 			}
@@ -170,14 +219,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			json.Unmarshal(msg.Payload, &p)
 			
 			if room, ok := rooms[p.Code]; ok && room.State != nil {
-				// Authoritative guard: Only the turn player can pick
 				if room.State.TurnPlayer != p.Player || room.State.Status == "GAME_OVER" { 
 					roomsMu.Unlock()
 					continue 
 				}
 
-				// Clear intent on pick
-				delete(room.State.DraftingIntents, p.Player)
+				if room.State.DraftingIntents != nil {
+					delete(room.State.DraftingIntents, p.Player)
+				}
 
 				pickedCount := 0
 				board := room.State.Boards[p.Player]
@@ -229,7 +278,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					for i := 0; i < pickedCount; i++ { addToFloor(p.Color) }
 				}
 
-				// Basic Turn Passing
 				for i, name := range room.Players {
 					if name == p.Player {
 						nextIdx := (i + 1) % len(room.Players)
@@ -272,6 +320,22 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func drawTiles(state *GameState, count int) []string {
+	drawn := []string{}
+	for i := 0; i < count; i++ {
+		if len(state.Bag) == 0 {
+			if len(state.Discard) == 0 { break }
+			state.Bag = append(state.Bag, state.Discard...)
+			state.Discard = []string{}
+			rand.Shuffle(len(state.Bag), func(a, b int) { state.Bag[a], state.Bag[b] = state.Bag[b], state.Bag[a] })
+		}
+		tile := state.Bag[len(state.Bag)-1]
+		state.Bag = state.Bag[:len(state.Bag)-1]
+		drawn = append(drawn, tile)
+	}
+	return drawn
+}
+
 func scoreRound(state *GameState, playerOrder []string) {
 	wallPattern := [][]string{
 		{"blue", "yellow", "red", "black", "purple"},
@@ -289,7 +353,7 @@ func scoreRound(state *GameState, playerOrder []string) {
 
 		for i, tile := range board.FloorLine {
 			if tile == "first_player" {
-				state.TurnPlayer = pName // New Turn Player Identified
+				state.TurnPlayer = pName
 			} else {
                 state.Discard = append(state.Discard, tile)
             }
@@ -330,7 +394,6 @@ func scoreRound(state *GameState, playerOrder []string) {
 		}
 	}
 
-	// Turn fallback if first_player token missing or unassigned
 	if state.TurnPlayer == "" && len(playerOrder) > 0 {
 		state.TurnPlayer = playerOrder[0]
 	}
@@ -347,11 +410,41 @@ func scoreRound(state *GameState, playerOrder []string) {
 
     if gameIsOver {
         state.Status = "GAME_OVER"
-        // (End game scoring logic preserved...)
+        for _, b := range state.Boards {
+            for r := 0; r < 5; r++ {
+                comp := true
+                for c := 0; c < 5; c++ { if b.Wall[r][c] == "" { comp = false; break } }
+                if comp { b.Score += 2 }
+            }
+            for c := 0; c < 5; c++ {
+                comp := true
+                for r := 0; r < 5; r++ { if b.Wall[r][c] == "" { comp = false; break } }
+                if comp { b.Score += 7 }
+            }
+            colors := []string{"blue", "yellow", "red", "black", "purple"}
+            for _, color := range colors {
+                count := 0
+                for r := 0; r < 5; r++ {
+                    for c := 0; c < 5; c++ { if b.Wall[r][c] == color { count++ } }
+                }
+                if count == 5 { b.Score += 10 }
+            }
+            if b.Score > maxScore {
+                maxScore = b.Score
+            }
+        }
+        
+        for _, b := range state.Boards {
+            if b.Score == maxScore {
+                b.Wins++
+            }
+        }
         return
     }
 
-	for i := 0; i < len(state.Factories); i++ { state.Factories[i] = drawTiles(state, 4) }
+	for i := 0; i < len(state.Factories); i++ {
+		state.Factories[i] = drawTiles(state, 4)
+	}
 	state.CenterHasFirstPlayer = true
 	state.Center = []string{"first_player"}
 }

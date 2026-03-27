@@ -102,10 +102,8 @@ class _GameScreenState extends State<GameScreen> {
         if (emptySlots == 0 && (patternLines[r] as List).isNotEmpty && patternLines[r][0] != "") validScoringRows.add(r);
       }
 
-      // STEP 1: Add Classes (Visual Triggers)
       setState(() { _isAnimatingScoring = true; _scoringRows = validScoringRows; _showSlide = true; _showShatter = true; });
       
-      // STEP 2: The Await (Wait 800ms for full animation flight & fade)
       await Future.delayed(const Duration(milliseconds: 800));
       if (!mounted) return;
 
@@ -114,7 +112,6 @@ class _GameScreenState extends State<GameScreen> {
       await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
 
-      // STEP 3: The State Wipe
       setState(() {
         _isAnimatingScoring = false;
         _showSlide = false;
@@ -239,18 +236,40 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Widget _buildBonusTrackers(List wall, {bool isOpp = false}) {
-    // (Logic for counting rows/cols/colors...)
+    int rows = 0; int cols = 0; int colors = 0;
+    if (wall.isNotEmpty) {
+      for (int r = 0; r < 5; r++) { if (wall[r].where((s) => s == "").isEmpty) rows++; }
+      for (int c = 0; c < 5; c++) {
+        bool full = true;
+        for (int r = 0; r < 5; r++) { if (wall.length > r && wall[r].length > c && wall[r][c] == "") full = false; }
+        if (full) cols++;
+      }
+      for (String color in ['blue', 'yellow', 'red', 'black', 'amethyst']) {
+        int count = 0;
+        for (int r = 0; r < 5; r++) {
+          for (int c = 0; c < 5; c++) { 
+            if (wall.length > r && wall[r].length > c) {
+              String t = wall[r][c].toLowerCase();
+              if (t == color || (color == 'amethyst' && (t == 'purple' || t == 'white'))) {
+                count++;
+              }
+            }
+          }
+        }
+        if (count == 5) colors++;
+      }
+    }
     double fz = isOpp ? 10 : 14;
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.menu, size: isOpp ? 10 : 16, color: Colors.grey), Text(" 0", style: TextStyle(fontSize: fz)),
+          Icon(Icons.menu, size: isOpp ? 10 : 16, color: Colors.grey), Text(" ${rows}", style: TextStyle(fontSize: fz)),
           const SizedBox(width: 8),
-          Icon(Icons.view_column, size: isOpp ? 10 : 16, color: Colors.grey), Text(" 0", style: TextStyle(fontSize: fz)),
+          Icon(Icons.view_column, size: isOpp ? 10 : 16, color: Colors.grey), Text(" ${cols}", style: TextStyle(fontSize: fz)),
           const SizedBox(width: 8),
-          Icon(Icons.diamond_outlined, size: isOpp ? 10 : 16, color: Colors.grey), Text(" 0", style: TextStyle(fontSize: fz)),
+          Icon(Icons.diamond_outlined, size: isOpp ? 10 : 16, color: Colors.grey), Text(" ${colors}", style: TextStyle(fontSize: fz)),
         ],
       )
     );
@@ -317,7 +336,8 @@ class _GameScreenState extends State<GameScreen> {
                 })),
                 const SizedBox(height: 16),
                 Container(
-                  width: double.infinity, margin: const EdgeInsets.symmetric(horizontal: 16), minHeight: 60,
+                  width: double.infinity, margin: const EdgeInsets.symmetric(horizontal: 16),
+                  constraints: const BoxConstraints(minHeight: 60), 
                   decoration: BoxDecoration(color: const Color(0xFFE5E0D8), borderRadius: BorderRadius.circular(12)),
                   child: Center(child: Wrap(children: center!.map((c) => GestureDetector(
                     onTap: () {
