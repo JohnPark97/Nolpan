@@ -101,19 +101,26 @@ class _GameScreenState extends State<GameScreen> {
         if (emptySlots == 0 && (patternLines[r] as List).isNotEmpty && patternLines[r][0] != "") validScoringRows.add(r);
       }
 
+      // 1. The Slide Trigger
       setState(() { _isAnimatingScoring = true; _scoringRows = validScoringRows; _showSlide = true; });
-      await Future.delayed(const Duration(milliseconds: 800));
+      await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
 
+      // 2. The Pop Trigger (Score floats up)
       setState(() { _showPop = true; });
       HapticFeedback.heavyImpact();
-      await Future.delayed(const Duration(milliseconds: 800));
+      await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
 
+      // 3. The Shatter Trigger (Dissolve FX via AnimatedOpacity)
       setState(() { _showShatter = true; });
-      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // HOTFIX: DECOUPLE ANIMATION FROM ARRAY WIPE. 
+      // Wait strictly for the 400ms visual dissolve to finish before mutating state.
+      await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
 
+      // 4. Clean up and Update Underlying Arrays (Tiles wipe)
       setState(() {
         _isAnimatingScoring = false;
         _showSlide = false;
@@ -121,7 +128,7 @@ class _GameScreenState extends State<GameScreen> {
         _showShatter = false;
         _scoringRows.clear();
         _incomingPayload = null;
-        _updateState(payload);
+        _updateState(payload); 
       });
 
       if (isGameOver && mounted) {
@@ -232,6 +239,7 @@ class _GameScreenState extends State<GameScreen> {
       case 'red': return tTerra;
       case 'yellow': return tGold;
       case 'black': return tInk;
+      // HOTFIX: Explicit hex declaration for Amethyst tile
       case 'amethyst': return const Color(0xFF8E44AD); 
       default: return Colors.transparent;
     }
@@ -248,6 +256,7 @@ class _GameScreenState extends State<GameScreen> {
       case 'red': icon = Icons.menu; break;
       case 'yellow': icon = Icons.circle; break;
       case 'black': icon = Icons.close; break;
+      // HOTFIX: Ensure diamond overlay is mapped
       case 'amethyst': icon = Icons.diamond; break; 
       case 'first_player': 
         return Container(
@@ -266,6 +275,7 @@ class _GameScreenState extends State<GameScreen> {
           borderRadius: BorderRadius.circular(4),
           boxShadow: (opacity == 1.0 && !isGhost) ? [BoxShadow(color: Colors.black.withOpacity(0.2), offset: const Offset(0, 3))] : [],
         ),
+        // Ensure inner icon renders clearly over the tile color
         child: Center(child: Icon(icon, size: size * 0.45, color: Colors.white.withOpacity(0.5 * opacity))),
       ),
     );
