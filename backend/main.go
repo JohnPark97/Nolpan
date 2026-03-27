@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 	"github.com/gorilla/websocket"
@@ -27,6 +28,7 @@ type GameState struct {
 	Bag                  []string                `json:"-"`
 	Discard              []string                `json:"-"`
 	Status               string                  `json:"status"`
+	LastScored           map[string]map[string]int `json:"last_scored"` // For floating combat text
 }
 
 type Room struct {
@@ -150,8 +152,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			var p struct{ Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
 			if room, ok := rooms[p.Code]; ok {
-				room.State = nil 
-				broadcastMessage(room, "RETURN_TO_LOBBY", map[string]interface{}{"code": room.Code, "players": room.Players})
+				room.State = generateInitialState(room.Players)
+				broadcastMessage(room, "GAME_STARTED", room.State)
 			}
 		}
 
@@ -278,7 +280,6 @@ func drawTiles(state *GameState, count int) []string {
 }
 
 func scoreRound(state *GameState) {
-    // THE AMETHYST UPGRADE: "purple" replaces "white"
 	wallPattern := [][]string{
 		{"blue", "yellow", "red", "black", "purple"},
 		{"purple", "blue", "yellow", "red", "black"},
@@ -288,7 +289,11 @@ func scoreRound(state *GameState) {
 	}
 	penalties := []int{-1, -1, -2, -2, -2, -3, -3}
 	
+    state.LastScored = make(map[string]map[string]int)
+
 	for pName, board := range state.Boards {
+        state.LastScored[pName] = make(map[string]int)
+
 		for i, tile := range board.FloorLine {
 			if tile == "first_player" {
 				state.TurnPlayer = pName
@@ -321,7 +326,10 @@ func scoreRound(state *GameState) {
                     for i := r - 1; i >= 0 && board.Wall[i][targetC] != ""; i-- { vScore++ }
                     for i := r + 1; i < 5 && board.Wall[i][targetC] != ""; i++ { vScore++ }
 
-                    if hScore > 1 && vScore > 1 { board.Score += hScore + vScore } else if hScore > 1 { board.Score += hScore } else if vScore > 1 { board.Score += vScore } else { board.Score += 1 }
+                    pts := 0
+                    if hScore > 1 && vScore > 1 { pts = hScore + vScore } else if hScore > 1 { pts = hScore } else if vScore > 1 { pts = vScore } else { pts = 1 }
+                    board.Score += pts
+                    state.LastScored[pName][strconv.Itoa(r)] = pts
                 }
                 for i := 0; i < r; i++ { state.Discard = append(state.Discard, color) }
 				for c := 0; c <= r; c++ { board.PatternLines[r][c] = "" }
@@ -351,7 +359,6 @@ func scoreRound(state *GameState) {
                 for r := 0; r < 5; r++ { if b.Wall[r][c] == "" { comp = false; break } }
                 if comp { b.Score += 7 }
             }
-            // THE AMETHYST UPGRADE: "purple" logic
             colors := []string{"blue", "yellow", "red", "black", "purple"}
             for _, color := range colors {
                 count := 0
@@ -378,7 +385,6 @@ func generateCode() string {
 
 func generateInitialState(players []string) *GameState {
     bag := make([]string, 0, 100)
-    // THE AMETHYST UPGRADE: "purple" logic
 	colors := []string{"blue", "yellow", "red", "black", "purple"}
     for _, c := range colors {
         for i := 0; i < 20; i++ { bag = append(bag, c) }
@@ -409,6 +415,7 @@ func generateInitialState(players []string) *GameState {
         Bag:                  bag,
         Discard:              []string{},
         Status:               "PLAYING",
+        LastScored:           make(map[string]map[string]int),
 	}
 
     for i := 0; i < 5; i++ { state.Factories[i] = drawTiles(state, 4) }
