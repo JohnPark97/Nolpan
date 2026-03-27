@@ -30,7 +30,6 @@ type GameState struct {
 	Discard              []string                `json:"-"`
 	Status               string                  `json:"status"`
 	LastScored           map[string]map[string]int `json:"last_scored"`
-	DraftingIntents      map[string]interface{}    `json:"drafting_intents"`
 }
 
 type Room struct {
@@ -150,7 +149,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if msg.Type == "RETURN_TO_LOBBY" {
+        if msg.Type == "RETURN_TO_LOBBY" {
 			var p struct{ Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
 			if room, ok := rooms[p.Code]; ok {
@@ -196,18 +195,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if msg.Type == "DRAFTING_INTENT" {
-			var p struct { Code string `json:"code"`; Name string `json:"name"`; Intent interface{} `json:"intent"` }
-			json.Unmarshal(msg.Payload, &p)
-			if room, ok := rooms[p.Code]; ok && room.State != nil {
-				if room.State.DraftingIntents == nil {
-					room.State.DraftingIntents = make(map[string]interface{})
-				}
-				room.State.DraftingIntents[p.Name] = p.Intent
-				broadcastMessage(room, "GAME_UPDATE", room.State)
-			}
-		}
-
 		if msg.Type == "PICK_TILES" {
 			var p struct {
 				Code      string `json:"code"`
@@ -219,14 +206,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			json.Unmarshal(msg.Payload, &p)
 			
 			if room, ok := rooms[p.Code]; ok && room.State != nil {
-				if room.State.TurnPlayer != p.Player || room.State.Status == "GAME_OVER" { 
-					roomsMu.Unlock()
-					continue 
-				}
-
-				if room.State.DraftingIntents != nil {
-					delete(room.State.DraftingIntents, p.Player)
-				}
+				if room.State.TurnPlayer != p.Player || room.State.Status == "GAME_OVER" { roomsMu.Unlock(); continue }
 
 				pickedCount := 0
 				board := room.State.Boards[p.Player]
@@ -301,7 +281,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					go func(r *Room) {
 						time.Sleep(100 * time.Millisecond)
 						r.mu.Lock()
-						scoreRound(r.State, r.Players)
+						scoreRound(r.State)
 						status := r.State.Status
 						r.mu.Unlock()
 						
@@ -316,6 +296,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+
 		roomsMu.Unlock()
 	}
 }
@@ -336,7 +317,7 @@ func drawTiles(state *GameState, count int) []string {
 	return drawn
 }
 
-func scoreRound(state *GameState, playerOrder []string) {
+func scoreRound(state *GameState) {
 	wallPattern := [][]string{
 		{"blue", "yellow", "red", "black", "purple"},
 		{"purple", "blue", "yellow", "red", "black"},
@@ -392,10 +373,6 @@ func scoreRound(state *GameState, playerOrder []string) {
 				for c := 0; c <= r; c++ { board.PatternLines[r][c] = "" }
 			}
 		}
-	}
-
-	if state.TurnPlayer == "" && len(playerOrder) > 0 {
-		state.TurnPlayer = playerOrder[0]
 	}
 	
     gameIsOver := false
@@ -487,7 +464,6 @@ func generateInitialState(players []string) *GameState {
         Discard:              []string{},
         Status:               "PLAYING",
         LastScored:           make(map[string]map[string]int),
-		DraftingIntents:      make(map[string]interface{}),
 	}
 
     for i := 0; i < 5; i++ { state.Factories[i] = drawTiles(state, 4) }
