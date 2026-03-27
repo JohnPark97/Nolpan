@@ -1,6 +1,6 @@
 class GameState {
-  final List> factories;
-  final List centerPool;
+  final List<List<String>> factories;
+  final List<String> centerPool;
   final int currentTurn;
 
   GameState({
@@ -9,23 +9,13 @@ class GameState {
     required this.currentTurn,
   });
 
-  factory GameState.fromJson(Map json) {
+  factory GameState.fromJson(Map<String, dynamic> json) {
     return GameState(
       factories: (json['factories'] as List)
-          .map((f) => List.from(f))
+          .map((f) => List<String>.from(f))
           .toList(),
-      centerPool: List.from(json['center_pool']),
+      centerPool: List<String>.from(json['center_pool']),
       currentTurn: json['current_turn'],
     );
-  }
-
-  void resetGame() {
-    patternLines = List.generate(5, (index) => []);
-    wallState = List.generate(5, (i) => List.filled(5, false));
-    shatterLine = [];
-    score = 0;
-    bonusTrackers = {'rows': 0, 'columns': 0, 'colors': 0};
-    gameStatus = 'drafting';
-    notifyListeners();
   }
 }
