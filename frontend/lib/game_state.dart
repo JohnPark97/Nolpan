@@ -20,6 +20,6 @@ class GameState {
   }
 
   void resetGame() {
-    // Arrays reset logic per spec
+    // State arrays reset logic
   }
 }

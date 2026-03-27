@@ -101,26 +101,19 @@ class _GameScreenState extends State<GameScreen> {
         if (emptySlots == 0 && (patternLines[r] as List).isNotEmpty && patternLines[r][0] != "") validScoringRows.add(r);
       }
 
-      // 1. The Slide Trigger
-      setState(() { _isAnimatingScoring = true; _scoringRows = validScoringRows; _showSlide = true; });
+      // STEP 1: Add Classes (Visual Triggers)
+      setState(() { _isAnimatingScoring = true; _scoringRows = validScoringRows; _showSlide = true; _showShatter = true; });
+      
+      // STEP 2: The Await (Hold the DOM tree intact for CSS to transition)
       await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
 
-      // 2. The Pop Trigger (Score floats up)
       setState(() { _showPop = true; });
       HapticFeedback.heavyImpact();
       await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
 
-      // 3. The Shatter Trigger (Dissolve FX via AnimatedOpacity)
-      setState(() { _showShatter = true; });
-      
-      // HOTFIX: DECOUPLE ANIMATION FROM ARRAY WIPE. 
-      // Wait strictly for the 400ms visual dissolve to finish before mutating state.
-      await Future.delayed(const Duration(milliseconds: 400));
-      if (!mounted) return;
-
-      // 4. Clean up and Update Underlying Arrays (Tiles wipe)
+      // STEP 3 & 4: The State Wipe and Remove Classes
       setState(() {
         _isAnimatingScoring = false;
         _showSlide = false;
@@ -128,7 +121,9 @@ class _GameScreenState extends State<GameScreen> {
         _showShatter = false;
         _scoringRows.clear();
         _incomingPayload = null;
-        _updateState(payload); 
+        
+        // This physically wipes the arrays in memory. Done AFTER animations finish.
+        _updateState(payload);
       });
 
       if (isGameOver && mounted) {
@@ -233,14 +228,18 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
+  // GLOBAL COLOR MAPPING
   Color _getBaseColor(String colorName) {
-    switch (colorName) {
+    switch (colorName.toLowerCase()) {
       case 'blue': return tTeal;
       case 'red': return tTerra;
       case 'yellow': return tGold;
       case 'black': return tInk;
-      // HOTFIX: Explicit hex declaration for Amethyst tile
-      case 'amethyst': return const Color(0xFF8E44AD); 
+      // UNIVERSAL AMETHYST INTERCEPT: Catches legacy 'white' or 'purple' from backend
+      case 'amethyst': 
+      case 'purple': 
+      case 'white': 
+        return const Color(0xFF8E44AD); 
       default: return Colors.transparent;
     }
   }
@@ -251,13 +250,16 @@ class _GameScreenState extends State<GameScreen> {
     Color bg = _getBaseColor(colorName);
     IconData? icon; 
     
-    switch (colorName) {
+    switch (colorName.toLowerCase()) {
       case 'blue': icon = Icons.star; break;
       case 'red': icon = Icons.menu; break;
       case 'yellow': icon = Icons.circle; break;
       case 'black': icon = Icons.close; break;
-      // HOTFIX: Ensure diamond overlay is mapped
-      case 'amethyst': icon = Icons.diamond; break; 
+      // UNIVERSAL AMETHYST ICON INTERCEPT
+      case 'amethyst': 
+      case 'purple': 
+      case 'white': 
+        icon = Icons.diamond; break; 
       case 'first_player': 
         return Container(
           width: size, height: size, margin: const EdgeInsets.all(1.5), 
@@ -275,7 +277,6 @@ class _GameScreenState extends State<GameScreen> {
           borderRadius: BorderRadius.circular(4),
           boxShadow: (opacity == 1.0 && !isGhost) ? [BoxShadow(color: Colors.black.withOpacity(0.2), offset: const Offset(0, 3))] : [],
         ),
-        // Ensure inner icon renders clearly over the tile color
         child: Center(child: Icon(icon, size: size * 0.45, color: Colors.white.withOpacity(0.5 * opacity))),
       ),
     );
@@ -299,7 +300,15 @@ class _GameScreenState extends State<GameScreen> {
       for (String color in ['blue', 'yellow', 'red', 'black', 'amethyst']) {
         int count = 0;
         for (int r = 0; r < 5; r++) {
-          for (int c = 0; c < 5; c++) { if (wall.length > r && wall[r].length > c && wall[r][c] == color) count++; }
+          for (int c = 0; c < 5; c++) { 
+            if (wall.length > r && wall[r].length > c) {
+              String t = wall[r][c].toLowerCase();
+              // Unify counting logic so legacy backend strings still count towards Amethyst bonus
+              if (t == color || (color == 'amethyst' && (t == 'purple' || t == 'white'))) {
+                count++;
+              }
+            }
+          }
         }
         if (count == 5) colors++;
       }
@@ -363,7 +372,12 @@ class _GameScreenState extends State<GameScreen> {
           }
           for (String color in ['blue', 'yellow', 'red', 'black', 'amethyst']) {
             int count = 0;
-            for (int r=0; r<5; r++) { for (int c=0; c<5; c++) { if (bWall[r][c] == color) count++; } }
+            for (int r=0; r<5; r++) { 
+              for (int c=0; c<5; c++) { 
+                String t = bWall[r][c].toLowerCase();
+                if (t == color || (color == 'amethyst' && (t == 'purple' || t == 'white'))) count++;
+              } 
+            }
             if (count == 5) colors++;
           }
         }
@@ -662,11 +676,26 @@ class _GameScreenState extends State<GameScreen> {
                                                   else tileW = _buildTile(rowColor, size: 24);
 
                                                   bool isFullRow = (patternLines[rIdx] as List).where((s) => s == "").isEmpty;
-                                                  if (isFullRow) {
-                                                    if (_showSlide && slotIdx == rIdx && _scoringRows.contains(rIdx)) { 
-                                                      tileW = _buildTile("", size: 24, empty: true);
-                                                    } else if (_showShatter && slotIdx < rIdx && _scoringRows.contains(rIdx)) { 
-                                                      tileW = AnimatedOpacity(opacity: _showShatter ? 0.0 : 1.0, duration: const Duration(milliseconds: 300), child: tileW);
+                                                  if (isFullRow && _scoringRows.contains(rIdx)) {
+                                                    if (slotIdx == rIdx) { 
+                                                      // The Slide Animation: Right-most tile translates towards wall
+                                                      tileW = AnimatedContainer(
+                                                        duration: const Duration(milliseconds: 400),
+                                                        curve: Curves.easeIn,
+                                                        transform: _showSlide ? Matrix4.translationValues(40.0, 0, 0) : Matrix4.identity(),
+                                                        child: AnimatedOpacity(
+                                                          opacity: _showShatter ? 0.0 : 1.0, 
+                                                          duration: const Duration(milliseconds: 400), 
+                                                          child: tileW
+                                                        )
+                                                      );
+                                                    } else { 
+                                                      // The Dissolve Animation: Leftover tiles fade in place
+                                                      tileW = AnimatedOpacity(
+                                                        opacity: _showShatter ? 0.0 : 1.0, 
+                                                        duration: const Duration(milliseconds: 400), 
+                                                        child: tileW
+                                                      );
                                                     }
                                                   }
                                                   
@@ -734,7 +763,7 @@ class _GameScreenState extends State<GameScreen> {
                                       
                                       Widget tileW = _buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor);
                                       if (_showShatter && t != "") {
-                                        tileW = AnimatedOpacity(opacity: _showShatter ? 0.0 : 1.0, duration: const Duration(milliseconds: 300), child: tileW);
+                                        tileW = AnimatedOpacity(opacity: _showShatter ? 0.0 : 1.0, duration: const Duration(milliseconds: 400), child: tileW);
                                       }
                                       return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [SizedBox(width: 27, height: 27, child: Stack(alignment: Alignment.center, children:[Positioned(child: tileW)])), const SizedBox(height: 4), Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))]));
                                     }),
