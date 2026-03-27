@@ -23,6 +23,7 @@ class _GameScreenState extends State<GameScreen> {
   List<List<String>>? factories;
   List<String>? center;
   Map<String, dynamic>? boards;
+  Map<String, dynamic>? activeSelection;
   String? turnPlayer;
   late StreamSubscription _sub;
 
@@ -101,19 +102,19 @@ class _GameScreenState extends State<GameScreen> {
         if (emptySlots == 0 && (patternLines[r] as List).isNotEmpty && patternLines[r][0] != "") validScoringRows.add(r);
       }
 
-      setState(() { _isAnimatingScoring = true; _scoringRows = validScoringRows; _showSlide = true; });
-      await Future.delayed(const Duration(milliseconds: 800));
+      // BUGFIX: Decouple State Wipe (Ghost Rows)
+      setState(() { _isAnimatingScoring = true; _scoringRows = validScoringRows; _showSlide = true; _showShatter = true; });
+      
+      // Wait for CSS animations to run before tearing down the widget tree
+      await Future.delayed(const Duration(milliseconds: 600));
       if (!mounted) return;
 
       setState(() { _showPop = true; });
       HapticFeedback.heavyImpact();
-      await Future.delayed(const Duration(milliseconds: 800));
+      await Future.delayed(const Duration(milliseconds: 600));
       if (!mounted) return;
 
-      setState(() { _showShatter = true; });
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (!mounted) return;
-
+      // Safely wipe arrays now that visuals are done
       setState(() {
         _isAnimatingScoring = false;
         _showSlide = false;
@@ -143,6 +144,7 @@ class _GameScreenState extends State<GameScreen> {
       });
     }
     boards = Map<String, dynamic>.from(payload['boards'] ?? {});
+    activeSelection = Map<String, dynamic>.from(payload['active_selection'] ?? {});
     turnPlayer = payload['turn_player'] ?? (boards!.isNotEmpty ? boards!.keys.first : "...");
     setState(() {
       heldColor = null; heldKilnIdx = null; heldCount = null; hoveredRow = null;
@@ -153,7 +155,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() { _sub.cancel(); super.dispose(); }
 
-  String _capitalize(String s) => s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1)}' : s;
+  String _capitalize(String s) => s.isNotEmpty ? "${s[0].toUpperCase()}${s.substring(1)}" : s;
 
   String? _getPlacementError(int rowIdx, String color) {
     if (rowIdx == -1) return null; 
@@ -178,61 +180,46 @@ class _GameScreenState extends State<GameScreen> {
     return null; 
   }
 
-  void _flyTile(GlobalKey startKey, GlobalKey endKey, String color, VoidCallback onComplete) {
-    final RenderBox? startBox = startKey.currentContext?.findRenderObject() as RenderBox?;
-    final RenderBox? endBox = endKey.currentContext?.findRenderObject() as RenderBox?;
-    if (startBox == null || endBox == null) { onComplete(); return; }
-    final Offset startPos = startBox.localToGlobal(Offset.zero);
-    final Offset endPos = endBox.localToGlobal(Offset.zero);
-    late OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (context) => TweenAnimationBuilder(
-        tween: Tween<double>(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-        builder: (context, double value, child) {
-          return Positioned(
-            left: startPos.dx + (endPos.dx - startPos.dx) * value,
-            top: startPos.dy + (endPos.dy - startPos.dy) * value,
-            child: Transform.scale(scale: value < 0.5 ? 1.0 + value : 1.5 - value, child: _buildTile(color, size: 24))
-          );
-        },
-        onEnd: () { entry.remove(); onComplete(); }
-      )
-    );
-    Overlay.of(context).insert(entry);
+  void _broadcastHover(String? color, int? kilnIdx) {
+    if (socketService.currentRoomCode != null) {
+      socketService.send('HOVER_TILE', {
+        'code': socketService.currentRoomCode,
+        'name': socketService.playerName,
+        'selection': color == null ? null : {'color': color, 'kiln_idx': kilnIdx}
+      });
+    }
   }
 
   void _commitTurn(int targetRow) {
     if (heldColor == null || heldKilnIdx == null) return;
     HapticFeedback.mediumImpact();
-    GlobalKey startKey = heldKilnIdx == -1 ? centerKey : factoryKeys[heldKilnIdx!];
-    GlobalKey endKey = targetRow == -1 ? floorKey : patternRowKeys[targetRow];
     String colorToFly = heldColor!;
     int kilnIdxToSend = heldKilnIdx!;
     
     setState(() { heldColor = null; heldKilnIdx = null; heldCount = null; hoveredRow = null; _isWaitingForServer = true; });
-    
-    _flyTile(startKey, endKey, colorToFly, () {
-      if (socketService.currentRoomCode != null) {
-        socketService.send('PICK_TILES', {
-          'code': socketService.currentRoomCode,
-          'player': socketService.playerName,
-          'kiln_idx': kilnIdxToSend,
-          'color': colorToFly,
-          'target_row': targetRow
-        });
-      }
-    });
+    _broadcastHover(null, null);
+
+    if (socketService.currentRoomCode != null) {
+      socketService.send('PICK_TILES', {
+        'code': socketService.currentRoomCode,
+        'player': socketService.playerName,
+        'kiln_idx': kilnIdxToSend,
+        'color': colorToFly,
+        'target_row': targetRow
+      });
+    }
   }
 
+  // BUGFIX: Unified Color Mapping
   Color _getBaseColor(String colorName) {
-    switch (colorName) {
+    switch (colorName.toLowerCase()) {
       case 'blue': return tTeal;
       case 'red': return tTerra;
       case 'yellow': return tGold;
       case 'black': return tInk;
-      case 'purple': return const Color(0xFF8E44AD); 
+      case 'amethyst': 
+      case 'purple': 
+      case 'white': return const Color(0xFF8E44AD); 
       default: return Colors.transparent;
     }
   }
@@ -243,12 +230,14 @@ class _GameScreenState extends State<GameScreen> {
     Color bg = _getBaseColor(colorName);
     IconData? icon; 
     
-    switch (colorName) {
+    switch (colorName.toLowerCase()) {
       case 'blue': icon = Icons.star; break;
       case 'red': icon = Icons.menu; break;
       case 'yellow': icon = Icons.circle; break;
       case 'black': icon = Icons.close; break;
-      case 'purple': icon = Icons.diamond; break; 
+      case 'amethyst': 
+      case 'purple': 
+      case 'white': icon = Icons.diamond; break; 
       case 'first_player': 
         return Container(
           width: size, height: size, margin: const EdgeInsets.all(1.5), 
@@ -289,7 +278,14 @@ class _GameScreenState extends State<GameScreen> {
       for (String color in ['blue', 'yellow', 'red', 'black', 'purple']) {
         int count = 0;
         for (int r = 0; r < 5; r++) {
-          for (int c = 0; c < 5; c++) { if (wall.length > r && wall[r].length > c && wall[r][c] == color) count++; }
+          for (int c = 0; c < 5; c++) { 
+            if (wall.length > r && wall[r].length > c) {
+              String t = wall[r][c].toLowerCase();
+              if (t == color || (color == 'purple' && (t == 'amethyst' || t == 'white'))) {
+                count++;
+              }
+            }
+          }
         }
         if (count == 5) colors++;
       }
@@ -301,11 +297,11 @@ class _GameScreenState extends State<GameScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.menu, size: sz, color: Colors.grey[400]), Text(" $rows", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          Icon(Icons.menu, size: sz, color: Colors.grey[400]), Text(" ${rows}", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
           SizedBox(width: isOpp ? 6 : 12),
-          Icon(Icons.view_column, size: sz, color: Colors.grey[400]), Text(" $cols", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          Icon(Icons.view_column, size: sz, color: Colors.grey[400]), Text(" ${cols}", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
           SizedBox(width: isOpp ? 6 : 12),
-          Icon(Icons.diamond_outlined, size: sz, color: Colors.grey[400]), Text(" $colors", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          Icon(Icons.diamond_outlined, size: sz, color: Colors.grey[400]), Text(" ${colors}", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
         ],
       )
     );
@@ -353,7 +349,12 @@ class _GameScreenState extends State<GameScreen> {
           }
           for (String color in ['blue', 'yellow', 'red', 'black', 'purple']) {
             int count = 0;
-            for (int r=0; r<5; r++) { for (int c=0; c<5; c++) { if (bWall[r][c] == color) count++; } }
+            for (int r=0; r<5; r++) { 
+              for (int c=0; c<5; c++) { 
+                String t = bWall[r][c].toLowerCase();
+                if (t == color || (color == 'purple' && (t == 'amethyst' || t == 'white'))) count++;
+              }
+            }
             if (count == 5) colors++;
           }
         }
@@ -368,7 +369,7 @@ class _GameScreenState extends State<GameScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            if (heldColor != null) Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() { heldColor = null; heldKilnIdx = null; heldCount = null; hoveredRow = null; }))),
+            if (heldColor != null) Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () { setState(() { heldColor = null; heldKilnIdx = null; heldCount = null; hoveredRow = null; }); _broadcastHover(null, null); })),
             
             Column(
               children: [
@@ -438,6 +439,7 @@ class _GameScreenState extends State<GameScreen> {
                                       Column(
                                         crossAxisAlignment: CrossAxisAlignment.end,
                                         children: List.generate(5, (r) => Row(
+                                          mainAxisAlignment: MainAxisAlignment.end, // BUGFIX: Opponent Gravity Flex-End
                                           children: List.generate(5, (cIdx) {
                                             if (cIdx < 4 - r) return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4); 
                                             int slotIdx = cIdx - (4 - r);
@@ -468,7 +470,19 @@ class _GameScreenState extends State<GameScreen> {
                                   ),
                                 ),
                               ),
-                              _buildBonusTrackers(oppWall, isOpp: true)
+                              _buildBonusTrackers(oppWall, isOpp: true),
+                              // BUGFIX: Opponent Penalty Line underneath
+                              const SizedBox(height: 2),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(7, (i) {
+                                  String t = i < oppFloor.length ? oppFloor[i] : "";
+                                  return Container(
+                                    margin: const EdgeInsets.all(0.5), width: 4, height: 4,
+                                    decoration: BoxDecoration(color: t != "" ? _getBaseColor(t) : Colors.grey[200], borderRadius: BorderRadius.circular(1))
+                                  );
+                                })
+                              )
                             ],
                           ),
                         ),
@@ -479,7 +493,7 @@ class _GameScreenState extends State<GameScreen> {
 
                 Expanded(flex: 33, child: (_isGameOver && _isReviewingBoard) ? Container(
                   margin: const EdgeInsets.symmetric(horizontal: 24),
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -488,14 +502,38 @@ class _GameScreenState extends State<GameScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          Expanded(child: PhysicsButton(text: "LOBBY", color: Colors.grey[400]!, shadowColor: Colors.grey[500]!, onTap: () { if (socketService.currentRoomCode != null) socketService.send('RETURN_TO_LOBBY', {'code': socketService.currentRoomCode}); })),
+                          // BUGFIX: Gold/Grey UI Overhaul
+                          Expanded(
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.grey[600],
+                                side: BorderSide(color: Colors.grey[400]!, width: 2),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onPressed: () { if (socketService.currentRoomCode != null) socketService.send('RETURN_TO_LOBBY', {'code': socketService.currentRoomCode}); },
+                              child: const Text("LOBBY", style: TextStyle(fontWeight: FontWeight.bold))
+                            )
+                          ),
                           const SizedBox(width: 12),
-                          Expanded(child: PhysicsButton(text: "PLAY AGAIN", color: tGold, shadowColor: const Color(0xFFC9A24A), onTap: () { if (socketService.currentRoomCode != null) socketService.send('PLAY_AGAIN', {'code': socketService.currentRoomCode}); })),
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFFD700),
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 0,
+                              ),
+                              onPressed: () { if (socketService.currentRoomCode != null) socketService.send('PLAY_AGAIN', {'code': socketService.currentRoomCode}); },
+                              child: const Text("PLAY AGAIN", style: TextStyle(fontWeight: FontWeight.bold))
+                            )
+                          ),
                         ]
                       )
                     ]
                   )
-                ) : Opacity(
+                ) : (_isGameOver ? const SizedBox.shrink() : Opacity( // BUGFIX: Shrink Market when GameOver
                   opacity: isMyTurn ? 1.0 : 0.5,
                   child: IgnorePointer(
                     ignoring: !isMyTurn,
@@ -514,10 +552,23 @@ class _GameScreenState extends State<GameScreen> {
                                   key: factoryKeys[kIdx],
                                   width: 54, height: 54, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                                   child: Center(child: Wrap(spacing: 2, runSpacing: 2, children: factories![kIdx].map((c) {
-                                    bool isHeld = heldColor == c && heldKilnIdx == kIdx;
-                                    bool dim = heldColor != null && !isHeld && heldKilnIdx == kIdx;
+                                    
+                                    // BUGFIX: LIVE MARKET SYNC LOGIC
+                                    bool isHeldLocally = heldColor == c && heldKilnIdx == kIdx;
+                                    bool isHeldByTurnPlayer = false;
+                                    if (turnPlayer != null && activeSelection != null && activeSelection![turnPlayer] != null) {
+                                        var sel = activeSelection![turnPlayer];
+                                        if (sel['color'] == c && sel['kiln_idx'] == kIdx) isHeldByTurnPlayer = true;
+                                    }
+                                    bool isHeld = isHeldLocally || (isHeldByTurnPlayer && turnPlayer != myName);
+                                    bool anyHeldInThisKiln = (heldKilnIdx == kIdx) || (activeSelection?[turnPlayer]?['kiln_idx'] == kIdx);
+                                    bool dim = anyHeldInThisKiln && !isHeld;
+
                                     return GestureDetector(
-                                      onTap: () => setState(() { heldColor = c; heldKilnIdx = kIdx; heldCount = factories![kIdx].where((t) => t == c).length; }),
+                                      onTap: () {
+                                        setState(() { heldColor = c; heldKilnIdx = kIdx; heldCount = factories![kIdx].where((t) => t == c).length; });
+                                        _broadcastHover(heldColor, heldKilnIdx);
+                                      },
                                       child: _buildTile(c, size: 18, opacity: dim ? 0.3 : 1.0, scale: isHeld ? 1.2 : 1.0),
                                     );
                                   }).toList())),
@@ -533,16 +584,30 @@ class _GameScreenState extends State<GameScreen> {
                           decoration: BoxDecoration(color: const Color(0xFFE5E0D8), borderRadius: BorderRadius.circular(12), border: const Border(top: BorderSide(color: Colors.black12, width: 2))), 
                           child: Center(child: center!.isEmpty ? const Text("CENTER POOL", style: TextStyle(fontSize: 10, color: Colors.grey)) : Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            child: Wrap(spacing: 4, runSpacing: 4, children: center!.map((c) => GestureDetector(
-                              onTap: c == "first_player" ? null : () => setState(() { heldColor = c; heldKilnIdx = -1; heldCount = center!.where((t) => t == c).length; }),
-                              child: _buildTile(c, size: 22, scale: (heldColor == c && heldKilnIdx == -1) ? 1.2 : 1.0)
-                            )).toList()),
+                            child: Wrap(spacing: 4, runSpacing: 4, children: center!.map((c) {
+                              // BUGFIX: LIVE MARKET SYNC LOGIC
+                              bool isHeldLocally = heldColor == c && heldKilnIdx == -1;
+                              bool isHeldByTurnPlayer = false;
+                              if (turnPlayer != null && activeSelection != null && activeSelection![turnPlayer] != null) {
+                                  var sel = activeSelection![turnPlayer];
+                                  if (sel['color'] == c && sel['kiln_idx'] == -1) isHeldByTurnPlayer = true;
+                              }
+                              bool isHeld = isHeldLocally || (isHeldByTurnPlayer && turnPlayer != myName);
+
+                              return GestureDetector(
+                                onTap: c == "first_player" ? null : () {
+                                  setState(() { heldColor = c; heldKilnIdx = -1; heldCount = center!.where((t) => t == c).length; });
+                                  _broadcastHover(heldColor, heldKilnIdx);
+                                },
+                                child: _buildTile(c, size: 22, scale: isHeld ? 1.2 : 1.0)
+                              );
+                            }).toList()),
                           )),
                         )
                       ],
                     ),
                   ),
-                )),
+                ))),
 
                 Expanded(flex: 45, child: Container(
                   color: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -617,7 +682,7 @@ class _GameScreenState extends State<GameScreen> {
                                                     if (_showSlide && slotIdx == rIdx && _scoringRows.contains(rIdx)) { 
                                                       tileW = _buildTile("", size: 24, empty: true);
                                                     } else if (_showShatter && slotIdx < rIdx && _scoringRows.contains(rIdx)) { 
-                                                      tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
+                                                      tileW = AnimatedOpacity(opacity: _showShatter ? 0.0 : 1.0, duration: const Duration(milliseconds: 500), child: tileW);
                                                     }
                                                   }
                                                   
@@ -655,7 +720,7 @@ class _GameScreenState extends State<GameScreen> {
                                                     floatText = TweenAnimationBuilder<double>(
                                                       tween: Tween(begin: 0.0, end: 1.0), duration: const Duration(milliseconds: 800), curve: Curves.easeOutCubic,
                                                       builder: (context, val, child) {
-                                                        return Transform.translate(offset: Offset(0, -30 * val), child: Opacity(opacity: 1.0 - val, child: Text("+$pts", style: const TextStyle(color: tGold, fontSize: 24, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black87, blurRadius: 4)]))));
+                                                        return Transform.translate(offset: Offset(0, -30 * val), child: Opacity(opacity: 1.0 - val, child: Text("+${pts}", style: const TextStyle(color: tGold, fontSize: 24, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black87, blurRadius: 4)]))));
                                                       }
                                                     );
                                                   }
@@ -685,7 +750,7 @@ class _GameScreenState extends State<GameScreen> {
                                       
                                       Widget tileW = _buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor);
                                       if (_showShatter && t != "") {
-                                        tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
+                                        tileW = AnimatedOpacity(opacity: _showShatter ? 0.0 : 1.0, duration: const Duration(milliseconds: 500), child: tileW);
                                       }
                                       return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [SizedBox(width: 27, height: 27, child: Stack(alignment: Alignment.center, children:[Positioned(child: tileW)])), const SizedBox(height: 4), Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))]));
                                     }),

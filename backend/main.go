@@ -30,6 +30,7 @@ type GameState struct {
 	Discard              []string                `json:"-"`
 	Status               string                  `json:"status"`
 	LastScored           map[string]map[string]int `json:"last_scored"`
+	ActiveSelection      map[string]interface{}    `json:"active_selection"`
 }
 
 type Room struct {
@@ -175,6 +176,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
                 state.Status = "PLAYING"
                 state.LastScored = make(map[string]map[string]int)
                 state.TurnPlayer = room.Players[0] 
+                state.ActiveSelection = make(map[string]interface{})
                 
                 for _, pName := range room.Players {
                     if b, exists := state.Boards[pName]; exists {
@@ -195,6 +197,27 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+        // FEATURE: LIVE MARKET PRESENCE
+        if msg.Type == "HOVER_TILE" {
+            var p struct {
+                Code      string `json:"code"`
+                Name      string `json:"name"`
+                Selection interface{} `json:"selection"`
+            }
+            json.Unmarshal(msg.Payload, &p)
+            if room, ok := rooms[p.Code]; ok && room.State != nil {
+                if room.State.ActiveSelection == nil {
+                    room.State.ActiveSelection = make(map[string]interface{})
+                }
+                if p.Selection == nil {
+                    delete(room.State.ActiveSelection, p.Name)
+                } else {
+                    room.State.ActiveSelection[p.Name] = p.Selection
+                }
+                broadcastMessage(room, "GAME_UPDATE", room.State)
+            }
+        }
+
 		if msg.Type == "PICK_TILES" {
 			var p struct {
 				Code      string `json:"code"`
@@ -206,7 +229,15 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			json.Unmarshal(msg.Payload, &p)
 			
 			if room, ok := rooms[p.Code]; ok && room.State != nil {
-				if room.State.TurnPlayer != p.Player || room.State.Status == "GAME_OVER" { roomsMu.Unlock(); continue }
+                // BUGFIX: Infinite Turn Guard
+				if room.State.TurnPlayer != p.Player || room.State.Status == "GAME_OVER" { 
+                    roomsMu.Unlock()
+                    continue 
+                }
+
+                if room.State.ActiveSelection != nil {
+                    delete(room.State.ActiveSelection, p.Player)
+                }
 
 				pickedCount := 0
 				board := room.State.Boards[p.Player]
@@ -278,10 +309,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 				if isRoundOver {
 					broadcastMessage(room, "GAME_UPDATE", room.State)
-					go func(r *Room) {
+					go func(r *Room, currentPlayers []string) {
 						time.Sleep(100 * time.Millisecond)
 						r.mu.Lock()
-						scoreRound(r.State)
+						scoreRound(r.State, currentPlayers)
 						status := r.State.Status
 						r.mu.Unlock()
 						
@@ -290,7 +321,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 						} else {
 							broadcastMessage(r, "GAME_UPDATE", r.State)
 						}
-					}(room)
+					}(room, room.Players)
 				} else {
 					broadcastMessage(room, "GAME_UPDATE", room.State)
 				}
@@ -317,7 +348,7 @@ func drawTiles(state *GameState, count int) []string {
 	return drawn
 }
 
-func scoreRound(state *GameState) {
+func scoreRound(state *GameState, playerOrder []string) {
 	wallPattern := [][]string{
 		{"blue", "yellow", "red", "black", "purple"},
 		{"purple", "blue", "yellow", "red", "black"},
@@ -328,6 +359,7 @@ func scoreRound(state *GameState) {
 	penalties := []int{-1, -1, -2, -2, -2, -3, -3}
 	
     state.LastScored = make(map[string]map[string]int)
+    state.TurnPlayer = "" // Reset to catch token owner
 
 	for pName, board := range state.Boards {
         state.LastScored[pName] = make(map[string]int)
@@ -375,6 +407,11 @@ func scoreRound(state *GameState) {
 		}
 	}
 	
+    // BUGFIX: Infinite Turn Guard Fallback
+    if state.TurnPlayer == "" && len(playerOrder) > 0 {
+        state.TurnPlayer = playerOrder[0]
+    }
+
     gameIsOver := false
     maxScore := -1
     for _, b := range state.Boards {
@@ -464,6 +501,7 @@ func generateInitialState(players []string) *GameState {
         Discard:              []string{},
         Status:               "PLAYING",
         LastScored:           make(map[string]map[string]int),
+		ActiveSelection:      make(map[string]interface{}),
 	}
 
     for i := 0; i < 5; i++ { state.Factories[i] = drawTiles(state, 4) }
