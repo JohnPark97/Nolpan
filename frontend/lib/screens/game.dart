@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import '../main.dart';
-import 'victory.dart';
+import 'lobby.dart';
 
 const List<List<String>> wallPattern = [
   ['blue', 'yellow', 'red', 'black', 'purple'],
@@ -42,6 +42,10 @@ class _GameScreenState extends State<GameScreen> {
   bool _showPop = false;
   bool _showShatter = false;
 
+  // SPRINT 10: Victory Flow Flags
+  bool _isGameOver = false;
+  bool _isReviewingBoard = false;
+
   List<int> _scoringRows = [];
   Map<String, dynamic>? _incomingPayload;
 
@@ -54,6 +58,11 @@ class _GameScreenState extends State<GameScreen> {
         _handleIncomingState(msg['payload'], isGameOver: false);
       } else if (msg['type'] == 'GAME_OVER') {
         _handleIncomingState(msg['payload'], isGameOver: true);
+      } else if (msg['type'] == 'RETURN_TO_LOBBY') {
+        if (mounted) {
+          _sub.cancel();
+          Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LobbyScreen()), (route) => false);
+        }
       }
     });
   }
@@ -61,7 +70,7 @@ class _GameScreenState extends State<GameScreen> {
   void _handleIncomingState(Map<String, dynamic> payload, {bool isGameOver = false}) async {
     if (boards == null || payload['factories'] == null) {
       _updateState(payload);
-      if (isGameOver && mounted) { _sub.cancel(); Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => VictoryScreen(finalState: payload))); }
+      if (isGameOver && mounted) setState(() => _isGameOver = true);
       return;
     }
 
@@ -73,13 +82,10 @@ class _GameScreenState extends State<GameScreen> {
       String myName = socketService.playerName ?? "";
       List patternLines = boards![myName]?['pattern_lines'] ?? [];
       
-      // FIX 1: ONLY score rows that are 100% FULL
       List<int> validScoringRows = [];
       for (int r = 0; r < 5; r++) {
         int emptySlots = (patternLines[r] as List).where((s) => s == "").length;
-        if (emptySlots == 0 && (patternLines[r] as List).isNotEmpty && patternLines[r][0] != "") {
-          validScoringRows.add(r);
-        }
+        if (emptySlots == 0 && (patternLines[r] as List).isNotEmpty && patternLines[r][0] != "") validScoringRows.add(r);
       }
 
       setState(() { _isAnimatingScoring = true; _scoringRows = validScoringRows; _showSlide = true; });
@@ -106,8 +112,7 @@ class _GameScreenState extends State<GameScreen> {
       });
 
       if (isGameOver && mounted) {
-        _sub.cancel();
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => VictoryScreen(finalState: payload)));
+        setState(() => _isGameOver = true);
       }
     } else {
       _updateState(payload);
@@ -232,7 +237,7 @@ class _GameScreenState extends State<GameScreen> {
       case 'black': icon = Icons.close; break;
       case 'purple': icon = Icons.diamond; break; 
       case 'first_player': 
-        return Container( // FIX 4: First Player Physical Tile Design
+        return Container(
           width: size, height: size, margin: const EdgeInsets.all(1.5), 
           decoration: BoxDecoration(color: const Color(0xFFF3E5AB), borderRadius: BorderRadius.circular(4), border: Border.all(color: tGold, width: 2), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), offset: const Offset(0, 3))]), 
           child: Center(child: Text("1", style: TextStyle(color: tGold, fontWeight: FontWeight.bold, fontSize: size * 0.5)))
@@ -255,11 +260,44 @@ class _GameScreenState extends State<GameScreen> {
     return tile;
   }
 
+  // SPRINT 10: END-GAME BONUS TRACKER UI
+  Widget _buildBonusTrackers(List wall, {bool isOpp = false}) {
+    int rows = 0; int cols = 0; int colors = 0;
+    if (wall.isNotEmpty) {
+      for (int r = 0; r < 5; r++) { if (wall[r].where((s) => s == "").isEmpty) rows++; }
+      for (int c = 0; c < 5; c++) {
+        bool full = true;
+        for (int r = 0; r < 5; r++) { if (wall.length > r && wall[r].length > c && wall[r][c] == "") full = false; }
+        if (full) cols++;
+      }
+      for (String color in ['blue', 'yellow', 'red', 'black', 'purple']) {
+        int count = 0;
+        for (int r = 0; r < 5; r++) {
+          for (int c = 0; c < 5; c++) { if (wall.length > r && wall[r].length > c && wall[r][c] == color) count++; }
+        }
+        if (count == 5) colors++;
+      }
+    }
+    double sz = isOpp ? 10 : 16;
+    double fz = isOpp ? 10 : 14;
+    return Padding(
+      padding: EdgeInsets.only(top: isOpp ? 4 : 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.menu, size: sz, color: Colors.grey[400]), Text(" $rows/5 ", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          Icon(Icons.view_column, size: sz, color: Colors.grey[400]), Text(" $cols/5 ", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          Icon(Icons.diamond_outlined, size: sz, color: Colors.grey[400]), Text(" $colors/5", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+        ],
+      )
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (factories == null || boards == null) return const Scaffold(body: Center(child: CircularProgressIndicator(color: tTeal)));
     String myName = socketService.playerName ?? "Player";
-    bool isMyTurn = turnPlayer == myName && !_isAnimatingScoring && !_isWaitingForServer;
+    bool isMyTurn = turnPlayer == myName && !_isAnimatingScoring && !_isWaitingForServer && !_isGameOver;
     
     Map<String, dynamic> myBoard = boards![myName] ?? {};
     List patternLines = myBoard['pattern_lines'] ?? [];
@@ -267,6 +305,32 @@ class _GameScreenState extends State<GameScreen> {
     List floor = myBoard['floor_line'] ?? [];
     List<String> opponents = boards!.keys.where((k) => k != myName).toList();
     const List<String> shatterPenalties = ['-1', '-1', '-2', '-2', '-2', '-3', '-3'];
+
+    // SPRINT 10: Victory Math Breakdown
+    List<Map<String, dynamic>> finalScores = [];
+    if (_isGameOver) {
+      boards!.forEach((name, data) {
+        int finalScore = data['score'] ?? 0;
+        List bWall = data['wall'] ?? [];
+        int rows = 0; int cols = 0; int colors = 0;
+        if (bWall.isNotEmpty) {
+          for (int r=0; r<5; r++) { if (bWall[r].where((s)=>s=="").isEmpty) rows++; }
+          for (int c=0; c<5; c++) {
+            bool full = true;
+            for (int r=0; r<5; r++) { if (bWall[r][c] == "") full = false; }
+            if (full) cols++;
+          }
+          for (String color in ['blue', 'yellow', 'red', 'black', 'purple']) {
+            int count = 0;
+            for (int r=0; r<5; r++) { for (int c=0; c<5; c++) { if (bWall[r][c] == color) count++; } }
+            if (count == 5) colors++;
+          }
+        }
+        int baseScore = finalScore - (rows * 2) - (cols * 7) - (colors * 10);
+        finalScores.add({ 'name': name, 'final': finalScore, 'base': baseScore, 'rows': rows * 2, 'cols': cols * 7, 'colors': colors * 10 });
+      });
+      finalScores.sort((a, b) => (b['final'] as int).compareTo(a['final'] as int));
+    }
 
     return Scaffold(
       backgroundColor: tBg,
@@ -278,17 +342,17 @@ class _GameScreenState extends State<GameScreen> {
             Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(isMyTurn ? "YOUR TURN" : "OPPONENT'S TURN", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: tTeal, letterSpacing: 2)),
-                      IconButton(icon: const Icon(Icons.emoji_events, color: tGold, size: 24), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VictoryScreen(finalState: {'boards': boards})))),
+                      IconButton(icon: const Icon(Icons.settings, color: Colors.transparent, size: 24), onPressed: null), // Spacer
                     ],
                   ),
                 ),
 
-                // FIX 2: MAXIMIZED OPPONENT BOARD
+                // ZONE 1: OPPONENT BOARD
                 Expanded(flex: 2, child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   child: opponents.isEmpty ? const Center(child: Text("WAITING FOR OPPONENTS...", style: TextStyle(fontSize: 10, color: Colors.grey))) : Row(
@@ -302,14 +366,14 @@ class _GameScreenState extends State<GameScreen> {
                       return Expanded(
                         child: Container(
                           margin: const EdgeInsets.symmetric(horizontal: 4),
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
                           child: Column(
                             children: [
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Row(children: [CircleAvatar(radius: 10, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))), const SizedBox(width: 4), Text(opp, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)]),
+                                  Row(children: [CircleAvatar(radius: 10, backgroundColor: tTeal, child: Text(opp[0].toUpperCase(), style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))), const SizedBox(width: 6), Text(opp, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)]),
                                   Text("${board['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)),
                                 ]
                               ),
@@ -317,41 +381,48 @@ class _GameScreenState extends State<GameScreen> {
                               Expanded(
                                 child: FittedBox(
                                   fit: BoxFit.contain,
-                                  child: Column(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
+                                      Column(
                                         crossAxisAlignment: CrossAxisAlignment.end,
-                                        children: [
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                            children: List.generate(5, (r) => Row(
-                                              children: List.generate(r + 1, (c) {
-                                                String tile = (oppPattern.length > r && oppPattern[r].length > c) ? oppPattern[r][c] : "";
-                                                return Container(margin: const EdgeInsets.all(0.5), width: 3, height: 3, decoration: BoxDecoration(color: tile == "" ? Colors.grey[200] : _getBaseColor(tile), borderRadius: BorderRadius.circular(0.5)));
-                                              })
-                                            ))
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: List.generate(5, (r) => Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: List.generate(5, (c) {
-                                                String tile = (oppWall.length > r && oppWall[r].length > c) ? oppWall[r][c] : "";
-                                                Color bg = tile != "" ? _getBaseColor(tile) : _getBaseColor(wallPattern[r][c]).withOpacity(0.1);
-                                                return Container(margin: const EdgeInsets.all(0.5), width: 3, height: 3, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(0.5)));
-                                              })
-                                            )),
-                                          ),
-                                        ]
+                                        children: List.generate(5, (r) => Row(
+                                          children: List.generate(5, (cIdx) {
+                                            // FIX 2: Opponent Right-to-Left Packing logic applied
+                                            if (cIdx < 4 - r) return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4); // Pad
+                                            int slotIdx = cIdx - (4 - r);
+                                            int capacity = r + 1;
+                                            List rowTiles = (oppPattern.length > r) ? oppPattern[r] : [];
+                                            int filled = rowTiles.where((s) => s != "").length;
+                                            int emptyCount = capacity - filled;
+                                            String tileColor = filled > 0 ? rowTiles.firstWhere((s) => s != "") : "";
+
+                                            if (slotIdx < emptyCount) {
+                                              return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4, decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(1)));
+                                            } else {
+                                              return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4, decoration: BoxDecoration(color: _getBaseColor(tileColor), borderRadius: BorderRadius.circular(1)));
+                                            }
+                                          })
+                                        ))
                                       ),
-                                      const SizedBox(height: 4),
-                                      Row(mainAxisSize: MainAxisSize.min, children: List.generate(7, (i) => Container(margin: const EdgeInsets.symmetric(horizontal: 0.5), width: 2, height: 2, decoration: BoxDecoration(color: i < oppFloor.length ? tTerra : Colors.grey[200], shape: BoxShape.circle)))),
-                                    ],
+                                      const SizedBox(width: 6),
+                                      Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: List.generate(5, (r) => Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: List.generate(5, (c) {
+                                            String tile = (oppWall.length > r && oppWall[r].length > c) ? oppWall[r][c] : "";
+                                            Color bg = tile != "" ? _getBaseColor(tile) : _getBaseColor(wallPattern[r][c]).withOpacity(0.1);
+                                            return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(1)));
+                                          })
+                                        )),
+                                      ),
+                                    ]
                                   ),
                                 ),
                               ),
+                              _buildBonusTrackers(oppWall, isOpp: true)
                             ],
                           ),
                         ),
@@ -391,11 +462,11 @@ class _GameScreenState extends State<GameScreen> {
                             }),
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
                         Container(
                           key: centerKey,
                           constraints: const BoxConstraints(minHeight: 80), width: double.infinity, margin: const EdgeInsets.symmetric(horizontal: 24),
-                          decoration: BoxDecoration(color: const Color(0xFFE5E0D8), borderRadius: BorderRadius.circular(12), border: const Border(top: BorderSide(color: Colors.black12, width: 2))), // Recessed Look
+                          decoration: BoxDecoration(color: const Color(0xFFE5E0D8), borderRadius: BorderRadius.circular(12), border: const Border(top: BorderSide(color: Colors.black12, width: 2))), 
                           child: Center(child: center!.isEmpty ? const Text("CENTER POOL", style: TextStyle(fontSize: 10, color: Colors.grey)) : Padding(
                             padding: const EdgeInsets.all(12),
                             child: Wrap(spacing: 4, runSpacing: 4, children: center!.map((c) => GestureDetector(
@@ -422,106 +493,110 @@ class _GameScreenState extends State<GameScreen> {
                         fit: BoxFit.scaleDown,
                         child: Column(
                           children: [
-                            ...List.generate(5, (rIdx) {
-                              String? errorMsg = heldColor != null ? _getPlacementError(rIdx, heldColor!) : null;
-                              bool isLegal = heldColor != null && errorMsg == null;
-                              bool isHovered = hoveredRow == rIdx;
-                              
-                              return GestureDetector(
-                                onTap: heldColor != null ? () {
-                                  if (isLegal) _commitTurn(rIdx);
-                                  else {
-                                    HapticFeedback.vibrate();
-                                    ScaffoldMessenger.of(context).clearSnackBars();
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: tTerra, behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2)));
-                                  }
-                                } : null,
-                                onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
-                                child: Container(
-                                  key: patternRowKeys[rIdx],
-                                  margin: const EdgeInsets.symmetric(vertical: 2),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: List.generate(5, (cIdx) {
-                                          if (cIdx < 4 - rIdx) return Container(width: 24, height: 24, margin: const EdgeInsets.all(1.5)); 
-                                          int slotIdx = cIdx - (4 - rIdx);
-                                          int capacity = rIdx + 1;
-                                          int filled = (patternLines[rIdx] as List).where((s) => s != "").length;
-                                          String rowColor = filled > 0 ? (patternLines[rIdx] as List).firstWhere((s) => s != "") : "";
-                                          int emptyCount = capacity - filled;
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // LEFT SIDE
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: List.generate(5, (rIdx) {
+                                        String? errorMsg = heldColor != null ? _getPlacementError(rIdx, heldColor!) : null;
+                                        bool isLegal = heldColor != null && errorMsg == null;
+                                        bool isHovered = hoveredRow == rIdx;
+                                        
+                                        return GestureDetector(
+                                          onTap: heldColor != null ? () {
+                                            if (isLegal) _commitTurn(rIdx);
+                                            else { HapticFeedback.vibrate(); ScaffoldMessenger.of(context).clearSnackBars(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: tTerra, behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2))); }
+                                          } : null,
+                                          onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
+                                          child: Container(
+                                            key: patternRowKeys[rIdx],
+                                            margin: const EdgeInsets.symmetric(vertical: 2),
+                                            color: Colors.transparent,
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: List.generate(5, (cIdx) {
+                                                if (cIdx < 4 - rIdx) return Container(width: 24, height: 24, margin: const EdgeInsets.all(1.5)); 
+                                                int slotIdx = cIdx - (4 - rIdx);
+                                                int capacity = rIdx + 1;
+                                                int filled = (patternLines[rIdx] as List).where((s) => s != "").length;
+                                                String rowColor = filled > 0 ? (patternLines[rIdx] as List).firstWhere((s) => s != "") : "";
+                                                int emptyCount = capacity - filled;
 
-                                          int ghostStart = emptyCount;
-                                          if (isHovered && isLegal && heldCount != null) {
-                                            ghostStart = emptyCount - heldCount!;
-                                            if (ghostStart < 0) ghostStart = 0;
-                                          }
+                                                int ghostStart = emptyCount;
+                                                if (isHovered && isLegal && heldCount != null) {
+                                                  ghostStart = emptyCount - heldCount!;
+                                                  if (ghostStart < 0) ghostStart = 0;
+                                                }
 
-                                          Widget tileW;
-                                          if (slotIdx < ghostStart) tileW = _buildTile("", size: 24, empty: true);
-                                          else if (slotIdx >= ghostStart && slotIdx < emptyCount) tileW = _buildTile(heldColor!, size: 24, isGhost: true);
-                                          else tileW = _buildTile(rowColor, size: 24);
+                                                Widget tileW;
+                                                if (slotIdx < ghostStart) tileW = _buildTile("", size: 24, empty: true);
+                                                else if (slotIdx >= ghostStart && slotIdx < emptyCount) tileW = _buildTile(heldColor!, size: 24, isGhost: true);
+                                                else tileW = _buildTile(rowColor, size: 24);
 
-                                          // THE JUICE: SLIDE AND SHATTER
-                                          if (_scoringRows.contains(rIdx)) {
-                                            if (_showSlide && slotIdx == rIdx) { 
-                                              int targetC = wallPattern[rIdx].indexOf(rowColor);
-                                              double distance = 24.0 + (targetC * 27.0);
-                                              tileW = AnimatedContainer(duration: const Duration(milliseconds: 800), curve: Curves.easeInOutCubic, transform: Matrix4.translationValues(distance, 0, 0), child: tileW);
-                                            } else if (_showShatter && slotIdx < rIdx) { 
-                                              tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
-                                            }
-                                          }
-                                          return tileW;
-                                        }),
-                                      ),
-                                      const SizedBox(width: 24),
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: List.generate(5, (cIdx) {
-                                          String t = (wall.length > rIdx && wall[rIdx].length > cIdx) ? wall[rIdx][cIdx] : "";
-                                          Widget slotW = t != "" ? _buildTile(t, size: 24) : _buildTile(wallPattern[rIdx][cIdx], size: 24, isGhost: true);
-                                          
-                                          // FIX 3: FLOATING COMBAT TEXT
-                                          if (_showPop && _scoringRows.contains(rIdx)) {
-                                            String rColor = patternLines[rIdx][0];
-                                            if (wallPattern[rIdx][cIdx] == rColor) {
-                                              int pts = _incomingPayload?['last_scored']?[myName]?[rIdx.toString()] ?? 1;
-                                              slotW = Stack(
-                                                alignment: Alignment.center,
-                                                clipBehavior: Clip.none,
-                                                children: [
-                                                  slotW,
-                                                  Positioned(
-                                                    child: TweenAnimationBuilder<double>(
-                                                      tween: Tween(begin: 0.0, end: 1.0),
-                                                      duration: const Duration(milliseconds: 800),
-                                                      curve: Curves.easeOutCubic,
-                                                      builder: (context, val, child) {
-                                                        return Transform.translate(
-                                                          offset: Offset(0, -30 * val),
-                                                          child: Opacity(
-                                                            opacity: 1.0 - val,
-                                                            child: Text("+$pts", style: const TextStyle(color: tGold, fontSize: 24, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black87, blurRadius: 4)])),
-                                                          )
-                                                        );
-                                                      }
-                                                    )
-                                                  )
-                                                ]
-                                              );
-                                            }
-                                          }
-                                          return slotW;
-                                        }),
-                                      )
-                                    ],
-                                  ),
+                                                bool isFullRow = (patternLines[rIdx] as List).where((s) => s == "").isEmpty;
+                                                if (isFullRow) {
+                                                  if (_showSlide && slotIdx == rIdx) { 
+                                                    int targetC = wallPattern[rIdx].indexOf(rowColor);
+                                                    double distance = 24.0 + (targetC * 27.0); // Exactly 27px per slot math
+                                                    tileW = AnimatedContainer(duration: const Duration(milliseconds: 800), curve: Curves.easeInOutCubic, transform: Matrix4.translationValues(distance, 0, 0), child: tileW);
+                                                  } else if (_showShatter && slotIdx < rIdx) { 
+                                                    tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
+                                                  }
+                                                }
+                                                // FIX 1: Absolute Sizing forces Flexbox to never shift
+                                                return SizedBox(width: 27, height: 27, child: Stack(clipBehavior: Clip.none, alignment: Alignment.center, children: [Positioned(child: tileW)]));
+                                              }),
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    )
+                                  ]
                                 ),
-                              );
-                            }),
+                                const SizedBox(width: 24), // Strict Gap
+                                // RIGHT SIDE
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Column(
+                                      children: List.generate(5, (rIdx) {
+                                        return Container(
+                                          margin: const EdgeInsets.symmetric(vertical: 2),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: List.generate(5, (cIdx) {
+                                              String t = (wall.length > rIdx && wall[rIdx].length > cIdx) ? wall[rIdx][cIdx] : "";
+                                              Widget slotW = t != "" ? _buildTile(t, size: 24) : _buildTile(wallPattern[rIdx][cIdx], size: 24, isGhost: true);
+                                              
+                                              Widget floatText = const SizedBox.shrink();
+                                              if (_showPop && _scoringRows.contains(rIdx)) {
+                                                String rColor = patternLines[rIdx][0];
+                                                if (wallPattern[rIdx][cIdx] == rColor) {
+                                                  int pts = _incomingPayload?['last_scored']?[myName]?[rIdx.toString()] ?? 1;
+                                                  floatText = TweenAnimationBuilder<double>(
+                                                    tween: Tween(begin: 0.0, end: 1.0), duration: const Duration(milliseconds: 800), curve: Curves.easeOutCubic,
+                                                    builder: (context, val, child) {
+                                                      return Transform.translate(offset: Offset(0, -30 * val), child: Opacity(opacity: 1.0 - val, child: Text("+$pts", style: const TextStyle(color: tGold, fontSize: 24, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black87, blurRadius: 4)]))));
+                                                    }
+                                                  );
+                                                }
+                                              }
+                                              // FIX 1: Absolute Positioning for score pop
+                                              return SizedBox(width: 27, height: 27, child: Stack(clipBehavior: Clip.none, alignment: Alignment.center, children: [Positioned(child: slotW), Positioned(child: floatText)]));
+                                            }),
+                                          ),
+                                        );
+                                      }),
+                                    )
+                                  ]
+                                )
+                              ],
+                            ),
                             const SizedBox(height: 24),
                             GestureDetector(
                               onTap: heldColor != null ? () => _commitTurn(-1) : null,
@@ -539,12 +614,12 @@ class _GameScreenState extends State<GameScreen> {
                                     if (_showShatter && t != "") {
                                       tileW = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.easeInCubic, transform: Matrix4.translationValues(0, 300.0, 0), child: tileW);
                                     }
-
-                                    return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [tileW, const SizedBox(height: 4), Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))]));
+                                    return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [SizedBox(width: 27, height: 27, child: Stack(alignment: Alignment.center, children:[Positioned(child: tileW)])), const SizedBox(height: 4), Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))]));
                                   }),
                                 ),
                               ),
                             ),
+                            _buildBonusTrackers(wall) // STRATEGY UI
                           ],
                         ),
                       ),
@@ -554,6 +629,73 @@ class _GameScreenState extends State<GameScreen> {
                 )),
               ],
             ),
+            
+            // SPRINT 10: VICTORY FLOW MODAL
+            if (_isGameOver && !_isReviewingBoard)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withOpacity(0.8),
+                  child: Center(
+                    child: Container(
+                      margin: const EdgeInsets.all(24), padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(color: tBg, borderRadius: BorderRadius.circular(24)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.emoji_events, size: 48, color: tGold),
+                          const SizedBox(height: 8),
+                          const Text("MOSAIC COMPLETE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.grey)),
+                          const SizedBox(height: 24),
+                          ...finalScores.map((p) {
+                            bool isMe = p['name'] == myName;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(color: isMe ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(12), border: isMe ? Border.all(color: tGold) : null),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(p['name'].toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: isMe ? tGold : tInk)),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text("${p['final']} PTS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: isMe ? tGold : tInk)),
+                                      Text("Base: ${p['base']} | Rows: +${p['rows']} | Cols: +${p['cols']} | Colors: +${p['colors']}", style: const TextStyle(fontSize: 8, color: Colors.grey)),
+                                    ]
+                                  )
+                                ]
+                              )
+                            );
+                          }).toList(),
+                          const SizedBox(height: 24),
+                          GestureDetector(
+                            onTap: () => setState(() => _isReviewingBoard = true),
+                            child: Container(width: double.infinity, padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: tTeal, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: tTeal.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 4))]), child: const Center(child: Text("REVIEW BOARDS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)))),
+                          )
+                        ]
+                      )
+                    )
+                  )
+                )
+              ),
+
+            if (_isGameOver && _isReviewingBoard)
+              Positioned(
+                bottom: 0, left: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5))]),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("GAME OVER", style: TextStyle(fontWeight: FontWeight.w900, color: tTeal, fontSize: 18)),
+                      GestureDetector(
+                        onTap: () { if (socketService.currentRoomCode != null) socketService.send('PLAY_AGAIN', {'code': socketService.currentRoomCode}); },
+                        child: Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), decoration: BoxDecoration(color: tGold, borderRadius: BorderRadius.circular(8)), child: const Text("PLAY AGAIN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                      )
+                    ]
+                  )
+                )
+              )
           ],
         ),
       ),
