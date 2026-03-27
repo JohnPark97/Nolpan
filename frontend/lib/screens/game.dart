@@ -153,7 +153,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() { _sub.cancel(); super.dispose(); }
 
-  String _capitalize(String s) => s.isNotEmpty ? "\${s[0].toUpperCase()}\${s.substring(1)}" : s;
+  String _capitalize(String s) => s.isNotEmpty ? "${s[0].toUpperCase()}${s.substring(1)}" : s;
 
   String? _getPlacementError(int rowIdx, String color) {
     if (rowIdx == -1) return null; 
@@ -165,7 +165,7 @@ class _GameScreenState extends State<GameScreen> {
 
     for (int col = 0; col < 5; col++) {
       if (wall.length > rowIdx && wall[rowIdx].length > col && wall[rowIdx][col] == color) {
-        return "You've already built a \${_capitalize(color)} tile in that row!";
+        return "You've already built a ${_capitalize(color)} tile in that row!";
       }
     }
     if (patternLines.length > rowIdx) {
@@ -301,11 +301,11 @@ class _GameScreenState extends State<GameScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.menu, size: sz, color: Colors.grey[400]), Text(" \${rows}", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          Icon(Icons.menu, size: sz, color: Colors.grey[400]), Text(" ${rows}", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
           SizedBox(width: isOpp ? 6 : 12),
-          Icon(Icons.view_column, size: sz, color: Colors.grey[400]), Text(" \${cols}", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          Icon(Icons.view_column, size: sz, color: Colors.grey[400]), Text(" ${cols}", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
           SizedBox(width: isOpp ? 6 : 12),
-          Icon(Icons.diamond_outlined, size: sz, color: Colors.grey[400]), Text(" \${colors}", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          Icon(Icons.diamond_outlined, size: sz, color: Colors.grey[400]), Text(" ${colors}", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
         ],
       )
     );
@@ -413,14 +413,14 @@ class _GameScreenState extends State<GameScreen> {
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text("\${board['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)),
+                                      Text("${board['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)),
                                       if ((board['wins'] ?? 0) > 0)
                                         Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             const Icon(Icons.emoji_events, size: 10, color: tGold),
                                             const SizedBox(width: 2),
-                                            Text("\${board['wins']}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tGold)),
+                                            Text("${board['wins']}", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tGold)),
                                           ],
                                         )
                                     ],
@@ -595,9 +595,9 @@ class _GameScreenState extends State<GameScreen> {
                             if ((myBoard['wins'] ?? 0) > 0) ...[
                               const Icon(Icons.emoji_events, size: 14, color: tGold),
                               const SizedBox(width: 2),
-                              Text("\${myBoard['wins']}  •  ", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tGold)),
+                              Text("${myBoard['wins']}  •  ", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tGold)),
                             ],
-                            Text("SCORE: \${myBoard['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: tTeal)),
+                            Text("SCORE: ${myBoard['score'] ?? 0}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: tTeal)),
                           ]
                         )
                       ]),
@@ -694,7 +694,7 @@ class _GameScreenState extends State<GameScreen> {
                                                     floatText = TweenAnimationBuilder<double>(
                                                       tween: Tween(begin: 0.0, end: 1.0), duration: const Duration(milliseconds: 800), curve: Curves.easeOutCubic,
                                                       builder: (context, val, child) {
-                                                        return Transform.translate(offset: Offset(0, -30 * val), child: Opacity(opacity: 1.0 - val, child: Text("+\${pts}", style: const TextStyle(color: tGold, fontSize: 24, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black87, blurRadius: 4)]))));
+                                                        return Transform.translate(offset: Offset(0, -30 * val), child: Opacity(opacity: 1.0 - val, child: Text("+${pts}", style: const TextStyle(color: tGold, fontSize: 24, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black87, blurRadius: 4)]))));
                                                       }
                                                     );
                                                   }
@@ -774,10 +774,10 @@ class _GameScreenState extends State<GameScreen> {
                                         if ((p['wins'] ?? 0) > 0) ...[
                                           const SizedBox(width: 8),
                                           const Icon(Icons.emoji_events, size: 14, color: tGold),
-                                          Text("\${p['wins']}", style: const TextStyle(color: tGold, fontWeight: FontWeight.bold, fontSize: 12))
+                                          Text("${p['wins']}", style: const TextStyle(color: tGold, fontWeight: FontWeight.bold, fontSize: 12))
                                         ]
                                       ]),
-                                      Text("\${p['final']} PTS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: isMe ? tGold : tInk)),
+                                      Text("${p['final']} PTS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: isMe ? tGold : tInk)),
                                     ]
                                   ),
                                   const Divider(height: 24),
@@ -785,15 +785,15 @@ class _GameScreenState extends State<GameScreen> {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       _buildScoreStat("Base Points", p['base'].toString()),
-                                      _buildScoreStat("Row Bonus", "+\${p['rows']}"),
+                                      _buildScoreStat("Row Bonus", "+${p['rows']}"),
                                     ]
                                   ),
                                   const SizedBox(height: 8),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      _buildScoreStat("Col Bonus", "+\${p['cols']}"),
-                                      _buildScoreStat("Color Bonus", "+\${p['colors']}"),
+                                      _buildScoreStat("Col Bonus", "+${p['cols']}"),
+                                      _buildScoreStat("Color Bonus", "+${p['colors']}"),
                                     ]
                                   )
                                 ]
