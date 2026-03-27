@@ -14,6 +14,7 @@ import (
 
 type PlayerBoard struct {
 	Score        int        `json:"score"`
+	Wins         int        `json:"wins"` // SPRINT 13: Persistent Wins
 	PatternLines [][]string `json:"pattern_lines"`
 	Wall         [][]string `json:"wall"`
 	FloorLine    []string   `json:"floor_line"`
@@ -148,13 +149,53 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if msg.Type == "PLAY_AGAIN" {
+        // SPRINT 13: RETURN TO LOBBY (HARD WIPE)
+        if msg.Type == "RETURN_TO_LOBBY" {
 			var p struct{ Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
 			if room, ok := rooms[p.Code]; ok {
-                // HARD WIPE STATE
 				room.State = nil 
 				broadcastMessage(room, "RETURN_TO_LOBBY", map[string]interface{}{"code": room.Code, "players": room.Players})
+			}
+		}
+
+        // SPRINT 13: PLAY AGAIN (SOFT WIPE, KEEPS WINS)
+		if msg.Type == "PLAY_AGAIN" {
+			var p struct{ Code string `json:"code"` }
+			json.Unmarshal(msg.Payload, &p)
+			if room, ok := rooms[p.Code]; ok && room.State != nil {
+                state := room.State
+                
+                bag := make([]string, 0, 100)
+                colors := []string{"blue", "yellow", "red", "black", "purple"}
+                for _, c := range colors {
+                    for i := 0; i < 20; i++ { bag = append(bag, c) }
+                }
+                rand.Shuffle(len(bag), func(i, j int) { bag[i], bag[j] = bag[j], bag[i] })
+                
+                state.Bag = bag
+                state.Discard = []string{}
+                state.Status = "PLAYING"
+                state.LastScored = make(map[string]map[string]int)
+                state.TurnPlayer = room.Players[0] 
+                
+                // Clear boards but retain Wins
+                for _, pName := range room.Players {
+                    if b, exists := state.Boards[pName]; exists {
+                        b.Score = 0
+                        b.FloorLine = []string{}
+                        for r := 0; r < 5; r++ {
+                            for c := 0; c <= r; c++ { b.PatternLines[r][c] = "" }
+                            for c := 0; c < 5; c++ { b.Wall[r][c] = "" }
+                        }
+                    }
+                }
+                
+                for i := 0; i < 5; i++ { state.Factories[i] = drawTiles(state, 4) }
+                state.CenterHasFirstPlayer = true
+                state.Center = []string{"first_player"}
+                
+				broadcastMessage(room, "GAME_STARTED", state)
 			}
 		}
 
@@ -339,6 +380,7 @@ func scoreRound(state *GameState) {
 	}
 	
     gameIsOver := false
+    maxScore := -1
     for _, b := range state.Boards {
         for r := 0; r < 5; r++ {
             rowComplete := true
@@ -367,6 +409,16 @@ func scoreRound(state *GameState) {
                     for c := 0; c < 5; c++ { if b.Wall[r][c] == color { count++ } }
                 }
                 if count == 5 { b.Score += 10 }
+            }
+            if b.Score > maxScore {
+                maxScore = b.Score
+            }
+        }
+        
+        // SPRINT 13: Increment Wins for the highest scorer(s)
+        for _, b := range state.Boards {
+            if b.Score == maxScore {
+                b.Wins++
             }
         }
         return
@@ -404,7 +456,7 @@ func generateInitialState(players []string) *GameState {
 			wall[i] = make([]string, 5)
 			for j := 0; j < 5; j++ { wall[i][j] = "" }
 		}
-		boards[pName] = &PlayerBoard{Score: 0, PatternLines: pattern, Wall: wall, FloorLine: []string{}}
+		boards[pName] = &PlayerBoard{Score: 0, Wins: 0, PatternLines: pattern, Wall: wall, FloorLine: []string{}}
 	}
 
 	state := &GameState{
