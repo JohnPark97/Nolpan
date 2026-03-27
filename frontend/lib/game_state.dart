@@ -1,21 +1,12 @@
-class GameState {
-  final List> factories;
-  final List centerPool;
-  final int currentTurn;
+// Placeholder updated game_state.dart
+class GameState extends ChangeNotifier {
+  final List<String> tileColors = ['Red', 'Blue', 'Yellow', 'Black', 'Amethyst'];
+  String gameStatus = 'drafting';
 
-  GameState({
-    required this.factories,
-    required this.centerPool,
-    required this.currentTurn,
-  });
-
-  factory GameState.fromJson(Map json) {
-    return GameState(
-      factories: (json['factories'] as List)
-          .map((f) => List.from(f))
-          .toList(),
-      centerPool: List.from(json['center_pool']),
-      currentTurn: json['current_turn'],
-    );
+  void resetGame() {
+    // hard wipe arrays
+    gameStatus = 'drafting';
+    notifyListeners();
+    SocketService.broadcastStateReset(roomId);
   }
 }
