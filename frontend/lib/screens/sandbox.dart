@@ -10,21 +10,16 @@ class SandboxScreen extends StatefulWidget {
 }
 
 class _SandboxScreenState extends State<SandboxScreen> {
-  // Scoring
   bool _scoreDissolve = false;
   final GlobalKey _scoreSourceKey = GlobalKey();
   final GlobalKey _scoreTargetKey = GlobalKey();
 
-  // Drafting
   bool _isFlying = false;
   List<bool> _drafted = [false, false, false];
   final GlobalKey _marketKey = GlobalKey();
   final GlobalKey _draftTargetKey = GlobalKey();
 
-  // Penalty
   List<bool> _penalties = List.filled(7, false);
-  
-  // Selection
   bool _isSelected = false;
 
   Color _getBaseColor(String colorName) {
@@ -70,7 +65,6 @@ class _SandboxScreenState extends State<SandboxScreen> {
 
     setState(() => _scoreDissolve = true);
 
-    // V36 BUGFIX: Anti-cyclic nullable overlay pattern
     OverlayEntry? entry;
     entry = OverlayEntry(
       builder: (BuildContext overlayCtx) => TweenAnimationBuilder<double>(
@@ -85,7 +79,7 @@ class _SandboxScreenState extends State<SandboxScreen> {
         onEnd: () => entry?.remove()
       )
     );
-    Overlay.of(context)?.insert(entry!);
+    Overlay.of(context).insert(entry!);
     
     HapticFeedback.mediumImpact();
     await Future.delayed(const Duration(milliseconds: 1500));
@@ -103,7 +97,6 @@ class _SandboxScreenState extends State<SandboxScreen> {
     final Offset startPos = startBox.localToGlobal(Offset.zero);
     final Offset endPos = endBox.localToGlobal(Offset.zero);
 
-    // V36 BUGFIX: Anti-cyclic nullable overlay pattern
     OverlayEntry? entry;
     entry = OverlayEntry(
       builder: (BuildContext overlayCtx) => TweenAnimationBuilder<double>(
@@ -134,7 +127,7 @@ class _SandboxScreenState extends State<SandboxScreen> {
         }
       )
     );
-    Overlay.of(context)?.insert(entry!);
+    Overlay.of(context).insert(entry!);
   }
 
   void _triggerPenalty() async {
