@@ -127,7 +127,8 @@ class _SandboxScreenState extends State<SandboxScreen> {
           _buildCard(Column(children: [
             Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(7, (idx) {
               return Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Column(children: [
-                Stack(alignment: Alignment.center, children: [_buildTile("", empty: true), AnimatedContainer(duration: const Duration(milliseconds: 400), curve: Curves.easeOutBounce, transform: _penalties[idx] ? Matrix4.identity() : Matrix4.translationValues(0, -40, 0), child: AnimatedOpacity(opacity: _penalties[idx] ? 1.0 : 0.0, duration: const Duration(milliseconds: 200), child: _buildTile('red')))]),
+                // BUGFIX: Changed invalid easeOutBounce to Curves.bounceOut
+                Stack(alignment: Alignment.center, children: [_buildTile("", empty: true), AnimatedContainer(duration: const Duration(milliseconds: 400), curve: Curves.bounceOut, transform: _penalties[idx] ? Matrix4.identity() : Matrix4.translationValues(0, -40, 0), child: AnimatedOpacity(opacity: _penalties[idx] ? 1.0 : 0.0, duration: const Duration(milliseconds: 200), child: _buildTile('red')))]),
                 const SizedBox(height: 4), Text(['-1','-1','-2','-2','-2','-3','-3'][idx], style: const TextStyle(color: tTerra, fontWeight: FontWeight.bold, fontSize: 12))
               ]));
             })),
