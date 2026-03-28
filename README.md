@@ -1,10 +1,14 @@
 # Nolpan Game Engine
-A tabletop-inspired multiplayer game built with Go and Flutter.
+A tabletop-inspired multiplayer board game built with Go (Backend) and Flutter Web (Frontend).
 
-## 🚀 Status
-- **Core Engine:** Operational
-- **Pipeline:** V22 Surgical Monitoring Enabled
-- **Logic:** Primary tracking set to 'Nolpan Web CI/CD'
+## 🚀 Current Status
+- **Core Engine:** Fully Operational
+- **Multiplayer State:** Real-time WebSocket Sync
+- **CI/CD Pipeline:** Fully Automated via Custom Smart Poller
+
+## 🛠️ Pipeline Architecture
+This repository relies on the **V23 Nolpan AI Deployer**.
+All pushes undergo strict programmatic verification to ensure file integrity, specifically preventing partial code updates (placeholders) and escaping errors during generation.
 
 ---
-*Last Verified Run: 2026-03-28, 9:52:48 AM*
+*Automated Verification Complete - 2026-03-28, 10:19:04 AM*
