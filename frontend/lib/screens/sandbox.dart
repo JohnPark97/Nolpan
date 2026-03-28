@@ -70,7 +70,8 @@ class _SandboxScreenState extends State<SandboxScreen> {
 
     setState(() => _scoreDissolve = true);
 
-    OverlayEntry? entry;
+    // BUGFIX: Dart 3 Strict Null Safety for Overlay
+    late OverlayEntry entry;
     entry = OverlayEntry(
       builder: (context) => TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
@@ -81,10 +82,10 @@ class _SandboxScreenState extends State<SandboxScreen> {
           double dy = startPos.dy + (endPos.dy - startPos.dy) * val;
           return Positioned(left: dx, top: dy, child: _buildTile('blue'));
         },
-        onEnd: () => entry?.remove()
+        onEnd: () => entry.remove()
       )
     );
-    Overlay.of(context).insert(entry);
+    Overlay.of(context)!.insert(entry);
     
     HapticFeedback.mediumImpact();
     await Future.delayed(const Duration(milliseconds: 1500));
@@ -102,7 +103,8 @@ class _SandboxScreenState extends State<SandboxScreen> {
     final Offset startPos = startBox.localToGlobal(Offset.zero);
     final Offset endPos = endBox.localToGlobal(Offset.zero);
 
-    OverlayEntry? entry;
+    // BUGFIX: Dart 3 Strict Null Safety for Overlay
+    late OverlayEntry entry;
     entry = OverlayEntry(
       builder: (context) => TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
@@ -120,7 +122,7 @@ class _SandboxScreenState extends State<SandboxScreen> {
           );
         },
         onEnd: () async {
-          entry?.remove();
+          entry.remove();
           for (int i = 0; i < 3; i++) {
             if (!mounted) return;
             setState(() => _drafted[i] = true);
@@ -132,7 +134,7 @@ class _SandboxScreenState extends State<SandboxScreen> {
         }
       )
     );
-    Overlay.of(context).insert(entry);
+    Overlay.of(context)!.insert(entry);
   }
 
   void _triggerPenalty() async {

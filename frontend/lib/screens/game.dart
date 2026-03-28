@@ -33,7 +33,6 @@ class _GameScreenState extends State<GameScreen> {
   int? heldCount;
   int? hoveredRow;
 
-  // SPRINT 15.3: GlobalKey Audit
   final List<GlobalKey> factoryKeys = List.generate(5, (_) => GlobalKey());
   final GlobalKey centerKey = GlobalKey();
   final List<GlobalKey> patternRowKeys = List.generate(5, (_) => GlobalKey());
@@ -88,7 +87,6 @@ class _GameScreenState extends State<GameScreen> {
         if (emptySlots == 0 && (patternLines[r] as List).isNotEmpty && patternLines[r][0] != "") validScoringRows.add(r);
       }
 
-      // SPRINT 15.3: 1:1 Scoring Integration
       for (int r in validScoringRows) {
         String color = patternLines[r][0];
         int targetCol = wallPattern[r].indexOf(color == 'purple' ? 'amethyst' : color);
@@ -165,7 +163,6 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  // SPRINT 15.3: 1:1 Drafting Integration
   void _commitTurn(int targetRow) {
     if (heldColor == null || heldKilnIdx == null) return;
     HapticFeedback.mediumImpact();
@@ -173,7 +170,6 @@ class _GameScreenState extends State<GameScreen> {
     int kilnIdxToSend = heldKilnIdx!;
     int countToFly = heldCount!;
     
-    // Play Flight
     GlobalKey sourceKey = kilnIdxToSend == -1 ? centerKey : factoryKeys[kilnIdxToSend];
     GlobalKey destKey = targetRow == -1 ? floorKey : patternRowKeys[targetRow];
     _playDraftingFlight(sourceKey, destKey, colorToFly, countToFly);
@@ -192,7 +188,6 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  // SPRINT 15.3: Physics Implementations
   void _playScoringFlight(int r, int c, String color) {
     final RenderBox? startBox = patternRowKeys[r].currentContext?.findRenderObject() as RenderBox?;
     final RenderBox? endBox = wallKeys[r][c].currentContext?.findRenderObject() as RenderBox?;
@@ -201,7 +196,8 @@ class _GameScreenState extends State<GameScreen> {
     final Offset startPos = startBox.localToGlobal(Offset.zero);
     final Offset endPos = endBox.localToGlobal(Offset.zero);
 
-    OverlayEntry? entry;
+    // BUGFIX: Dart 3 Strict Null Safety for Overlay
+    late OverlayEntry entry;
     entry = OverlayEntry(
       builder: (context) => TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
@@ -210,10 +206,10 @@ class _GameScreenState extends State<GameScreen> {
         builder: (context, val, child) {
           return Positioned(left: startPos.dx + (endPos.dx - startPos.dx) * val, top: startPos.dy + (endPos.dy - startPos.dy) * val, child: _buildTile(color, size: 24));
         },
-        onEnd: () => entry?.remove()
+        onEnd: () => entry.remove()
       )
     );
-    Overlay.of(context).insert(entry);
+    Overlay.of(context)!.insert(entry);
   }
 
   void _playDraftingFlight(GlobalKey startKey, GlobalKey endKey, String color, int count) {
@@ -224,7 +220,8 @@ class _GameScreenState extends State<GameScreen> {
     final Offset startPos = startBox.localToGlobal(Offset.zero);
     final Offset endPos = endBox.localToGlobal(Offset.zero);
 
-    OverlayEntry? entry;
+    // BUGFIX: Dart 3 Strict Null Safety for Overlay
+    late OverlayEntry entry;
     entry = OverlayEntry(
       builder: (context) => TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
@@ -241,10 +238,10 @@ class _GameScreenState extends State<GameScreen> {
             )
           );
         },
-        onEnd: () => entry?.remove()
+        onEnd: () => entry.remove()
       )
     );
-    Overlay.of(context).insert(entry);
+    Overlay.of(context)!.insert(entry);
   }
 
   Color _getBaseColor(String colorName) {
@@ -381,7 +378,6 @@ class _GameScreenState extends State<GameScreen> {
                                     bool isHeldLocally = heldColor == c && heldKilnIdx == kIdx;
                                     bool isHeldByOpp = activeSelection?[turnPlayer]?['color'] == c && activeSelection?[turnPlayer]?['kiln_idx'] == kIdx && turnPlayer != myName;
                                     bool dim = (heldKilnIdx == kIdx || activeSelection?[turnPlayer]?['kiln_idx'] == kIdx) && !isHeldLocally && !isHeldByOpp;
-                                    // SPRINT 15.3: SELECTION PULSE
                                     return GestureDetector(
                                       onTap: () { setState(() { heldColor = c; heldKilnIdx = kIdx; heldCount = factories![kIdx].where((t) => t == c).length; }); _broadcastHover(heldColor, heldKilnIdx); },
                                       child: AnimatedContainer(
@@ -454,7 +450,10 @@ class _GameScreenState extends State<GameScreen> {
                                           if (cIdx < 4 - rIdx) return Container(width: 24, height: 24, margin: const EdgeInsets.all(1.5)); 
                                           int slotIdx = cIdx - (4 - rIdx);
                                           int filled = (patternLines[rIdx] as List).where((s) => s != "").length;
-                                          String rowColor = filled > 0 ? patternLines[rIdx].firstWhere((s) => s != "") : "";
+                                          
+                                          // BUGFIX: Dart 3 JIT strict cast safety
+                                          String rowColor = filled > 0 ? (patternLines[rIdx] as List).firstWhere((s) => s.toString().isNotEmpty).toString() : "";
+                                          
                                           int emptyCount = (rIdx + 1) - filled;
                                           int ghostStart = emptyCount;
                                           if (hoveredRow == rIdx && isLegal && heldCount != null) ghostStart = math.max(0, emptyCount - heldCount!);
