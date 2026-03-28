@@ -5,11 +5,11 @@ import '../main.dart';
 import 'lobby.dart';
 
 const List<List<String>> wallPattern = [
-  ['blue', 'yellow', 'red', 'black', 'purple'],
-  ['purple', 'blue', 'yellow', 'red', 'black'],
-  ['black', 'purple', 'blue', 'yellow', 'red'],
-  ['red', 'black', 'purple', 'blue', 'yellow'],
-  ['yellow', 'red', 'black', 'purple', 'blue'],
+  ['blue', 'yellow', 'red', 'black', 'amethyst'],
+  ['amethyst', 'blue', 'yellow', 'red', 'black'],
+  ['black', 'amethyst', 'blue', 'yellow', 'red'],
+  ['red', 'black', 'amethyst', 'blue', 'yellow'],
+  ['yellow', 'red', 'black', 'amethyst', 'blue'],
 ];
 
 class GameScreen extends StatefulWidget {
@@ -102,10 +102,8 @@ class _GameScreenState extends State<GameScreen> {
         if (emptySlots == 0 && (patternLines[r] as List).isNotEmpty && patternLines[r][0] != "") validScoringRows.add(r);
       }
 
-      // BUGFIX: Decouple State Wipe (Ghost Rows)
       setState(() { _isAnimatingScoring = true; _scoringRows = validScoringRows; _showSlide = true; _showShatter = true; });
       
-      // Wait for CSS animations to run before tearing down the widget tree
       await Future.delayed(const Duration(milliseconds: 600));
       if (!mounted) return;
 
@@ -114,7 +112,6 @@ class _GameScreenState extends State<GameScreen> {
       await Future.delayed(const Duration(milliseconds: 600));
       if (!mounted) return;
 
-      // Safely wipe arrays now that visuals are done
       setState(() {
         _isAnimatingScoring = false;
         _showSlide = false;
@@ -145,9 +142,16 @@ class _GameScreenState extends State<GameScreen> {
     }
     boards = Map<String, dynamic>.from(payload['boards'] ?? {});
     activeSelection = Map<String, dynamic>.from(payload['active_selection'] ?? {});
-    turnPlayer = payload['turn_player'] ?? (boards!.isNotEmpty ? boards!.keys.first : "...");
+    
+    // BUGFIX: Ghost Deselect Fix - Only clear local state if turn actually changes
+    String newTurnPlayer = payload['turn_player'] ?? (boards!.isNotEmpty ? boards!.keys.first : "...");
+    bool turnChanged = turnPlayer != newTurnPlayer;
+    turnPlayer = newTurnPlayer;
+    
     setState(() {
-      heldColor = null; heldKilnIdx = null; heldCount = null; hoveredRow = null;
+      if (turnChanged) {
+        heldColor = null; heldKilnIdx = null; heldCount = null; hoveredRow = null;
+      }
       _isWaitingForServer = false; 
     });
   }
@@ -210,7 +214,6 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  // BUGFIX: Unified Color Mapping
   Color _getBaseColor(String colorName) {
     switch (colorName.toLowerCase()) {
       case 'blue': return tTeal;
@@ -275,13 +278,13 @@ class _GameScreenState extends State<GameScreen> {
         for (int r = 0; r < 5; r++) { if (wall.length > r && wall[r].length > c && wall[r][c] == "") full = false; }
         if (full) cols++;
       }
-      for (String color in ['blue', 'yellow', 'red', 'black', 'purple']) {
+      for (String color in ['blue', 'yellow', 'red', 'black', 'amethyst']) {
         int count = 0;
         for (int r = 0; r < 5; r++) {
           for (int c = 0; c < 5; c++) { 
             if (wall.length > r && wall[r].length > c) {
               String t = wall[r][c].toLowerCase();
-              if (t == color || (color == 'purple' && (t == 'amethyst' || t == 'white'))) {
+              if (t == color || (color == 'amethyst' && (t == 'purple' || t == 'white'))) {
                 count++;
               }
             }
@@ -347,12 +350,12 @@ class _GameScreenState extends State<GameScreen> {
             for (int r=0; r<5; r++) { if (bWall[r][c] == "") full = false; }
             if (full) cols++;
           }
-          for (String color in ['blue', 'yellow', 'red', 'black', 'purple']) {
+          for (String color in ['blue', 'yellow', 'red', 'black', 'amethyst']) {
             int count = 0;
             for (int r=0; r<5; r++) { 
               for (int c=0; c<5; c++) { 
                 String t = bWall[r][c].toLowerCase();
-                if (t == color || (color == 'purple' && (t == 'amethyst' || t == 'white'))) count++;
+                if (t == color || (color == 'amethyst' && (t == 'purple' || t == 'white'))) count++;
               }
             }
             if (count == 5) colors++;
@@ -439,7 +442,7 @@ class _GameScreenState extends State<GameScreen> {
                                       Column(
                                         crossAxisAlignment: CrossAxisAlignment.end,
                                         children: List.generate(5, (r) => Row(
-                                          mainAxisAlignment: MainAxisAlignment.end, // BUGFIX: Opponent Gravity Flex-End
+                                          mainAxisAlignment: MainAxisAlignment.end,
                                           children: List.generate(5, (cIdx) {
                                             if (cIdx < 4 - r) return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4); 
                                             int slotIdx = cIdx - (4 - r);
@@ -471,15 +474,15 @@ class _GameScreenState extends State<GameScreen> {
                                 ),
                               ),
                               _buildBonusTrackers(oppWall, isOpp: true),
-                              // BUGFIX: Opponent Penalty Line underneath
-                              const SizedBox(height: 2),
+                              // BUGFIX: Increased Opponent Penalty Size (14px with 2px gaps)
+                              const SizedBox(height: 8),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: List.generate(7, (i) {
                                   String t = i < oppFloor.length ? oppFloor[i] : "";
                                   return Container(
-                                    margin: const EdgeInsets.all(0.5), width: 4, height: 4,
-                                    decoration: BoxDecoration(color: t != "" ? _getBaseColor(t) : Colors.grey[200], borderRadius: BorderRadius.circular(1))
+                                    margin: const EdgeInsets.symmetric(horizontal: 2), width: 14, height: 14, 
+                                    decoration: BoxDecoration(color: t != "" ? _getBaseColor(t) : Colors.grey[200], borderRadius: BorderRadius.circular(2))
                                   );
                                 })
                               )
@@ -502,7 +505,6 @@ class _GameScreenState extends State<GameScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          // BUGFIX: Gold/Grey UI Overhaul
                           Expanded(
                             child: OutlinedButton(
                               style: OutlinedButton.styleFrom(
@@ -533,7 +535,7 @@ class _GameScreenState extends State<GameScreen> {
                       )
                     ]
                   )
-                ) : (_isGameOver ? const SizedBox.shrink() : Opacity( // BUGFIX: Shrink Market when GameOver
+                ) : (_isGameOver ? const SizedBox.shrink() : Opacity( 
                   opacity: isMyTurn ? 1.0 : 0.5,
                   child: IgnorePointer(
                     ignoring: !isMyTurn,
@@ -553,7 +555,6 @@ class _GameScreenState extends State<GameScreen> {
                                   width: 54, height: 54, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                                   child: Center(child: Wrap(spacing: 2, runSpacing: 2, children: factories![kIdx].map((c) {
                                     
-                                    // BUGFIX: LIVE MARKET SYNC LOGIC
                                     bool isHeldLocally = heldColor == c && heldKilnIdx == kIdx;
                                     bool isHeldByTurnPlayer = false;
                                     if (turnPlayer != null && activeSelection != null && activeSelection![turnPlayer] != null) {
@@ -585,7 +586,6 @@ class _GameScreenState extends State<GameScreen> {
                           child: Center(child: center!.isEmpty ? const Text("CENTER POOL", style: TextStyle(fontSize: 10, color: Colors.grey)) : Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             child: Wrap(spacing: 4, runSpacing: 4, children: center!.map((c) {
-                              // BUGFIX: LIVE MARKET SYNC LOGIC
                               bool isHeldLocally = heldColor == c && heldKilnIdx == -1;
                               bool isHeldByTurnPlayer = false;
                               if (turnPlayer != null && activeSelection != null && activeSelection![turnPlayer] != null) {
