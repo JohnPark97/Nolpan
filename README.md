@@ -8,11 +8,11 @@ A tabletop-inspired multiplayer game built with Go and Flutter.
 - **Ghost Row Animations:** FIX IN PROGRESS (DECOUPLED AWAIT)
 
 ## 📡 Pipeline Architecture
-This repository now uses the **V18 AI Pipeline Controller** which enforces:
-1. Atomic multi-file commits.
-2. Unescaped Dart string interpolation.
-3. Zero-placeholder file integrity.
-4. Live CI/CD failure diagnostics.
+This repository uses the **V19 AI Pipeline Controller** (Robust Edition):
+1. **Atomic Commits:** Multi-file integrity guaranteed.
+2. **SHA-1 Verification:** Bypasses CDN race conditions.
+3. **Smart Polling:** Live CI feedback with auto-diagnostic logs.
+4. **Encoding Safe:** Proper UTF-8 base64 handling for emojis.
 
 ---
-*Last Updated via AI Controller: March 2026*
+*Last Updated via V19 AI Controller: March 2026*
