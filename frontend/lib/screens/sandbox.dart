@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // BUGFIX: Required for HapticFeedback
 import 'dart:math' as math;
 import '../main.dart';
 
