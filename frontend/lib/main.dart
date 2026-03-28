@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'socket_service.dart';
 import 'screens/welcome.dart';
+import 'screens/sandbox.dart';
 
 final socketService = SocketService();
 
@@ -13,9 +14,13 @@ const Color tGold = Color(0xFFE9C46A);
 const Color tIce = Color(0xFFE0E5EC);
 
 void main() {
-  runApp(const MaterialApp(
+  runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: WelcomeScreen(),
+    initialRoute: '/',
+    routes: {
+      '/': (context) => const WelcomeScreen(),
+      '/sandbox': (context) => const SandboxScreen(),
+    },
   ));
 }
 
@@ -45,7 +50,6 @@ class _PhysicsButtonState extends State<PhysicsButton> {
   bool _isPressed = false;
   @override
   Widget build(BuildContext context) {
-    // THE FIX: If button is white, use dark text. Otherwise use white text.
     Color contentColor = widget.color == Colors.white || widget.color == tSurface ? tInk : Colors.white;
 
     return GestureDetector(
