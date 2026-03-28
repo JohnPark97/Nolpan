@@ -5,14 +5,11 @@ A tabletop-inspired multiplayer game built with Go and Flutter.
 - **Infinite Turn Guard:** DEPLOYED & VERIFIED
 - **Live Market Presence:** DEPLOYED & VERIFIED
 - **UI/UX Overhaul:** COMPLETE
-- **Ghost Row Animations:** FIX IN PROGRESS (DECOUPLED AWAIT)
+- **Ghost Row Animations:** COMPLETE
 
 ## 📡 Pipeline Architecture
-This repository uses the **V19 AI Pipeline Controller** (Robust Edition):
-1. **Atomic Commits:** Multi-file integrity guaranteed.
-2. **SHA-1 Verification:** Bypasses CDN race conditions.
-3. **Smart Polling:** Live CI feedback with auto-diagnostic logs.
-4. **Encoding Safe:** Proper UTF-8 base64 handling for emojis.
+This repository uses the **AI Pipeline Controller** with Smart Polling.
+The polling engine actively filters out `pages-build-deployment` to prevent false-positive crash reports and tracks the actual `build` workflows securely.
 
 ---
-*Last Updated via V19 AI Controller: March 2026*
+*Last Smart Poll Test Triggered: 2026-03-28, 9:47:41 AM*
