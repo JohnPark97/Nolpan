@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // BUGFIX: Required for HapticFeedback
+import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import '../main.dart';
 
@@ -10,29 +10,22 @@ class SandboxScreen extends StatefulWidget {
 }
 
 class _SandboxScreenState extends State<SandboxScreen> {
-  // 1. Scoring State
-  bool _scoreSlide = false;
+  // Scoring
   bool _scoreDissolve = false;
+  final GlobalKey _scoreSourceKey = GlobalKey();
+  final GlobalKey _scoreTargetKey = GlobalKey();
 
-  // 2. Drafting State
-  List<bool> _drafted = [false, false, false];
-
-  // 3. Penalty State
-  List<bool> _penalties = List.filled(7, false);
-
-  // 4. Flight State
+  // Drafting
   bool _isFlying = false;
-  List<bool> _flightLanded = [false, false, false];
-  final GlobalKey _kilnKey = GlobalKey();
-  final GlobalKey _stairKey = GlobalKey();
+  List<bool> _drafted = [false, false, false];
+  final GlobalKey _marketKey = GlobalKey();
+  final GlobalKey _draftTargetKey = GlobalKey();
 
-  // 5. Selection Pulse State
+  // Penalty
+  List<bool> _penalties = List.filled(7, false);
+  
+  // Selection
   bool _isSelected = false;
-
-  // 6. Mascot State
-  double _nollieY = -60.0; // Hidden below clipping box
-  String _nollieFace = '🐶';
-  Color _nollieColor = Colors.white;
 
   Color _getBaseColor(String colorName) {
     switch (colorName) {
@@ -68,43 +61,43 @@ class _SandboxScreenState extends State<SandboxScreen> {
   }
 
   void _triggerScore() async {
-    setState(() { _scoreSlide = false; _scoreDissolve = false; });
-    await Future.delayed(const Duration(milliseconds: 100));
-    setState(() { _scoreSlide = true; _scoreDissolve = true; });
+    final RenderBox? startBox = _scoreSourceKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? endBox = _scoreTargetKey.currentContext?.findRenderObject() as RenderBox?;
+    if (startBox == null || endBox == null) return;
+
+    final Offset startPos = startBox.localToGlobal(Offset.zero);
+    final Offset endPos = endBox.localToGlobal(Offset.zero);
+
+    setState(() => _scoreDissolve = true);
+
+    OverlayEntry? entry;
+    entry = OverlayEntry(
+      builder: (context) => TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeOutBack,
+        builder: (context, val, child) {
+          double dx = startPos.dx + (endPos.dx - startPos.dx) * val;
+          double dy = startPos.dy + (endPos.dy - startPos.dy) * val;
+          return Positioned(left: dx, top: dy, child: _buildTile('blue'));
+        },
+        onEnd: () => entry?.remove()
+      )
+    );
+    Overlay.of(context).insert(entry);
+    
+    HapticFeedback.mediumImpact();
     await Future.delayed(const Duration(milliseconds: 1500));
-    if (mounted) setState(() { _scoreSlide = false; _scoreDissolve = false; });
-  }
-
-  void _triggerDraft() async {
-    setState(() => _drafted = [false, false, false]);
-    await Future.delayed(const Duration(milliseconds: 100));
-    for (int i = 0; i < 3; i++) {
-      if (!mounted) return;
-      setState(() => _drafted[i] = true);
-      await Future.delayed(const Duration(milliseconds: 100)); // Stagger
-    }
-  }
-
-  void _triggerPenalty() async {
-    setState(() => _penalties = List.filled(7, false));
-    await Future.delayed(const Duration(milliseconds: 100));
-    for (int i = 0; i < 4; i++) {
-      if (!mounted) return;
-      setState(() => _penalties[i] = true);
-      await Future.delayed(const Duration(milliseconds: 100));
-    }
+    if (mounted) setState(() => _scoreDissolve = false);
   }
 
   void _triggerFlight() async {
     if (_isFlying) return;
-    setState(() { _isFlying = true; _flightLanded = [false, false, false]; });
+    setState(() { _isFlying = true; _drafted = [false, false, false]; });
 
-    final RenderBox? startBox = _kilnKey.currentContext?.findRenderObject() as RenderBox?;
-    final RenderBox? endBox = _stairKey.currentContext?.findRenderObject() as RenderBox?;
-    if (startBox == null || endBox == null) {
-      setState(() => _isFlying = false);
-      return;
-    }
+    final RenderBox? startBox = _marketKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? endBox = _draftTargetKey.currentContext?.findRenderObject() as RenderBox?;
+    if (startBox == null || endBox == null) { setState(() => _isFlying = false); return; }
 
     final Offset startPos = startBox.localToGlobal(Offset.zero);
     final Offset endPos = endBox.localToGlobal(Offset.zero);
@@ -113,52 +106,44 @@ class _SandboxScreenState extends State<SandboxScreen> {
     entry = OverlayEntry(
       builder: (context) => TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOutSine, // Smooth arc timing
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOutSine,
         builder: (context, val, child) {
-          // Math: Linear X, Parabolic Y for gravity arc
           double dx = startPos.dx + (endPos.dx - startPos.dx) * val;
-          double dy = startPos.dy + (endPos.dy - startPos.dy) * val - (math.sin(val * math.pi) * 80);
+          double dy = startPos.dy + (endPos.dy - startPos.dy) * val - (math.sin(val * math.pi) * 60);
           return Positioned(
-            left: dx + 20, // Center alignment offset
-            top: dy + 20,
+            left: dx + 20, top: dy + 10,
             child: Transform.scale(
               scale: val < 0.5 ? 1.0 + val * 0.3 : 1.3 - (val - 0.5) * 0.6,
-              child: Row(
-                children: List.generate(3, (i) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                  child: _buildTile('purple', size: 24)
-                ))
-              )
+              child: Row(children: List.generate(3, (i) => Padding(padding: const EdgeInsets.symmetric(horizontal: 1.5), child: _buildTile('purple', size: 24))))
             )
           );
         },
         onEnd: () async {
           entry?.remove();
-          // Trigger the Pop-In landing cascade
           for (int i = 0; i < 3; i++) {
             if (!mounted) return;
-            setState(() => _flightLanded[i] = true);
+            setState(() => _drafted[i] = true);
             HapticFeedback.lightImpact();
-            await Future.delayed(const Duration(milliseconds: 80)); // Fast Stagger
+            await Future.delayed(const Duration(milliseconds: 80));
           }
-          await Future.delayed(const Duration(milliseconds: 1500));
-          if (mounted) setState(() { _isFlying = false; _flightLanded = [false, false, false]; });
+          await Future.delayed(const Duration(milliseconds: 1000));
+          if (mounted) setState(() { _isFlying = false; _drafted = [false, false, false]; });
         }
       )
     );
     Overlay.of(context).insert(entry);
   }
 
-  void _triggerNollie(bool isError) async {
-    setState(() {
-      _nollieFace = isError ? '🥸' : '🥳';
-      _nollieColor = isError ? Colors.red[50]! : Colors.green[50]!;
-      _nollieY = 20.0; // Peek up
-    });
-    if (isError) HapticFeedback.heavyImpact();
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) setState(() => _nollieY = -60.0); // Hide
+  void _triggerPenalty() async {
+    setState(() => _penalties = List.filled(7, false));
+    await Future.delayed(const Duration(milliseconds: 100));
+    for (int i = 0; i < 4; i++) {
+      if (!mounted) return;
+      setState(() => _penalties[i] = true);
+      HapticFeedback.lightImpact();
+      await Future.delayed(const Duration(milliseconds: 80));
+    }
   }
 
   @override
@@ -166,50 +151,68 @@ class _SandboxScreenState extends State<SandboxScreen> {
     return Scaffold(
       backgroundColor: tBg,
       appBar: AppBar(
-        backgroundColor: tInk,
-        elevation: 0,
-        title: const Text("ANIMATION PREVIEW v1.1", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
+        backgroundColor: tInk, elevation: 0,
+        title: const Text("PHYSICS AUDIT v1.2", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
         leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20), onPressed: () => Navigator.pop(context)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          // 1. SCORING
-          _buildHeading("1. SCORING: SLIDE & DISSOLVE"),
+          _buildHeading("1. SCORING: GLOBALKEY SNAP"),
           _buildCard(Column(children: [
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               Row(children: List.generate(5, (idx) {
                 Widget tile = _buildTile('blue');
-                if (idx < 4) {
-                  tile = AnimatedScale(
-                    scale: _scoreDissolve ? 0.0 : 1.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInBack,
-                    child: AnimatedOpacity(opacity: _scoreDissolve ? 0.0 : 1.0, duration: const Duration(milliseconds: 400), child: tile)
-                  );
-                } else {
-                  // CORRECTED PHYSICS: Elastic Snap
-                  tile = AnimatedContainer(duration: const Duration(milliseconds: 500), curve: Curves.elasticOut, transform: _scoreSlide ? Matrix4.translationValues(55.0, 0, 0) : Matrix4.identity(), child: tile);
+                if (idx == 4) {
+                  return Stack(alignment: Alignment.center, children: [_buildTile("", empty: true), SizedBox(key: _scoreSourceKey, child: AnimatedOpacity(opacity: _scoreDissolve ? 0.0 : 1.0, duration: const Duration(milliseconds: 100), child: tile))]);
                 }
-                return Stack(alignment: Alignment.center, children: [_buildTile("", empty: true), tile]);
+                return Stack(alignment: Alignment.center, children: [_buildTile("", empty: true), AnimatedScale(scale: _scoreDissolve ? 0.0 : 1.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInBack, child: AnimatedOpacity(opacity: _scoreDissolve ? 0.0 : 1.0, duration: const Duration(milliseconds: 400), child: tile))]);
               })),
               const SizedBox(width: 40),
-              Stack(alignment: Alignment.center, children: [_buildTile('blue', isGhost: true), AnimatedOpacity(opacity: _scoreSlide ? 1.0 : 0.0, duration: const Duration(milliseconds: 200), child: _buildTile('blue'))]),
+              SizedBox(key: _scoreTargetKey, child: Stack(alignment: Alignment.center, children: [_buildTile('blue', isGhost: true), AnimatedOpacity(opacity: 0.0, duration: Duration.zero, child: _buildTile('blue'))])),
             ]),
             const SizedBox(height: 32),
-            PhysicsButton(text: "Trigger Score Snap", color: tTeal, shadowColor: const Color(0xFF1E7066), onTap: _triggerScore),
+            PhysicsButton(text: "Trigger GlobalKey Flight", color: tTeal, shadowColor: const Color(0xFF1E7066), onTap: _triggerScore),
           ])),
 
-          // 2. DRAFTING POP-IN
-          _buildHeading("2. DRAFTING: STAGGERED POP-IN"),
+          _buildHeading("2. DRAFTING: ARC FLIGHT + POP-IN"),
           _buildCard(Column(children: [
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(3, (idx) {
-              return Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Stack(alignment: Alignment.center, children: [_buildTile("", empty: true), AnimatedScale(scale: _drafted[idx] ? 1.0 : 0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeOutBack, child: _buildTile('purple'))]));
-            })),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Container(
+                  key: _marketKey, width: 70, height: 70, decoration: BoxDecoration(color: Colors.grey[100], shape: BoxShape.circle),
+                  child: Center(child: Wrap(spacing: 2, runSpacing: 2, children: List.generate(4, (i) => AnimatedOpacity(opacity: (i < 3 && _isFlying) ? 0.0 : 1.0, duration: const Duration(milliseconds: 100), child: _buildTile('purple', size: 18)))))
+                ),
+                Container(
+                  key: _draftTargetKey,
+                  child: Row(children: List.generate(3, (i) => Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Stack(alignment: Alignment.center, children: [_buildTile("", empty: true), AnimatedScale(scale: _drafted[i] ? 1.0 : 0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeOutBack, child: _buildTile('purple'))]))))
+                )
+              ]
+            ),
             const SizedBox(height: 32),
-            PhysicsButton(text: "Trigger Pop-In (3 Tiles)", color: tGold, shadowColor: const Color(0xFFB59A53), onTap: _triggerDraft),
+            PhysicsButton(text: "Trigger Market Arc", color: tGold, shadowColor: const Color(0xFFB59A53), onTap: _triggerFlight),
           ])),
 
-          // 3. PENALTY SHATTER
-          _buildHeading("3. PENALTY: THE SHATTER"),
+          _buildHeading("3. SELECTION: PHYSICAL LIFT"),
+          _buildCard(Column(children: [
+            GestureDetector(
+              onTap: () { setState(() => _isSelected = !_isSelected); HapticFeedback.selectionClick(); },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150), curve: Curves.easeOutBack,
+                transform: _isSelected ? Matrix4.translationValues(0, -6.0, 0) : Matrix4.identity(),
+                child: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(color: tTeal, borderRadius: BorderRadius.circular(6), boxShadow: _isSelected ? [const BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 8))] : [const BoxShadow(color: Colors.black26, blurRadius: 3, offset: Offset(0, 2))]),
+                  child: const Icon(Icons.star, color: Colors.white70),
+                )
+              ),
+            ),
+            const SizedBox(height: 32),
+            PhysicsButton(text: "Toggle Lift", color: tIce, shadowColor: const Color(0xFFB5BBC4), onTap: () { setState(() => _isSelected = !_isSelected); HapticFeedback.selectionClick(); }),
+          ])),
+
+          _buildHeading("4. PENALTY: THE SHATTER"),
           _buildCard(Column(children: [
             Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(7, (idx) {
               return Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Column(children: [
@@ -220,87 +223,6 @@ class _SandboxScreenState extends State<SandboxScreen> {
             const SizedBox(height: 32),
             PhysicsButton(text: "Trigger Penalty Drop", color: tTerra, shadowColor: const Color(0xFFB3563F), onTap: _triggerPenalty),
           ])),
-
-          // 4. MARKET FLIGHT ARC
-          _buildHeading("4. DRAFTING: MARKET FLIGHT ARC"),
-          _buildCard(Column(children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Container(
-                  key: _kilnKey,
-                  width: 70, height: 70, decoration: BoxDecoration(color: Colors.grey[100], shape: BoxShape.circle),
-                  child: Center(child: Wrap(spacing: 2, runSpacing: 2, children: List.generate(4, (i) => AnimatedOpacity(opacity: (i < 3 && _isFlying) ? 0.0 : 1.0, duration: const Duration(milliseconds: 100), child: _buildTile('purple', size: 18)))))
-                ),
-                Container(
-                  key: _stairKey,
-                  child: Row(children: List.generate(3, (i) => Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Stack(alignment: Alignment.center, children: [_buildTile("", empty: true), AnimatedScale(scale: _flightLanded[i] ? 1.0 : 0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeOutBack, child: _buildTile('purple'))]))))
-                )
-              ]
-            ),
-            const SizedBox(height: 32),
-            PhysicsButton(text: "Trigger Arc Flight", color: tInk, shadowColor: const Color(0xFF151621), onTap: _triggerFlight),
-          ])),
-
-          // 5. TILE SELECTION PULSE
-          _buildHeading("5. INTERACTION: SELECTION PULSE"),
-          _buildCard(Column(children: [
-            GestureDetector(
-              onTap: () => setState(() => _isSelected = !_isSelected),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOutBack,
-                transform: _isSelected ? Matrix4.translationValues(0, -6.0, 0) : Matrix4.identity(),
-                child: Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                    color: tTeal,
-                    borderRadius: BorderRadius.circular(6),
-                    boxShadow: _isSelected ? [const BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 8))] : [const BoxShadow(color: Colors.black26, blurRadius: 3, offset: Offset(0, 2))],
-                  ),
-                  child: const Icon(Icons.star, color: Colors.white70),
-                )
-              ),
-            ),
-            const SizedBox(height: 32),
-            PhysicsButton(text: "Toggle Physical Lift", color: tIce, shadowColor: const Color(0xFFB5BBC4), onTap: () => setState(() => _isSelected = !_isSelected)),
-          ])),
-
-          // 6. MASCOT FEEDBACK
-          _buildHeading("6. MASCOT: NOLLIE OVERLAY"),
-          _buildCard(Column(children: [
-            // Mock UI boundary to hide Nollie
-            ClipRect(
-              child: Stack(
-                alignment: Alignment.bottomCenter,
-                children: [
-                  Container(height: 100, width: double.infinity, color: Colors.transparent),
-                  // Nollie Sprite
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 600),
-                    curve: Curves.elasticOut,
-                    bottom: _nollieY,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      decoration: BoxDecoration(color: _nollieColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, -2))]),
-                      child: Text(_nollieFace, style: const TextStyle(fontSize: 42)),
-                    )
-                  ),
-                  // Mock Top of Board
-                  Positioned(bottom: 0, child: Container(height: 30, width: 200, decoration: BoxDecoration(color: tBg, borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)), border: Border.all(color: Colors.black12)))),
-                ]
-              )
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: PhysicsButton(text: "Error", color: tTerra, shadowColor: const Color(0xFFB3563F), onTap: () => _triggerNollie(true))),
-                const SizedBox(width: 12),
-                Expanded(child: PhysicsButton(text: "Victory", color: Colors.green, shadowColor: Colors.green[800]!, onTap: () => _triggerNollie(false))),
-              ]
-            )
-          ])),
-
           const SizedBox(height: 40),
         ],
       )
