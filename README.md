@@ -1,8 +1,18 @@
-# Nolpan
+# Nolpan Game Engine
+A tabletop-inspired multiplayer game built with Go and Flutter.
 
-A real-time multiplayer board game built with Flutter and Go.
+## 🚀 Sprint 14 Status: ACTIVE
+- **Infinite Turn Guard:** DEPLOYED & VERIFIED
+- **Live Market Presence:** DEPLOYED & VERIFIED
+- **UI/UX Overhaul:** COMPLETE
+- **Ghost Row Animations:** FIX IN PROGRESS (DECOUPLED AWAIT)
 
-## Infrastructure
-- **Frontend:** Flutter Web (Hosted on GitHub Pages)
-- **Backend:** Go WebSockets (Hosted on Render)
-- **Status:** Milestone 4 (Lively Lobby Synchronization) Active.
+## 📡 Pipeline Architecture
+This repository now uses the **V18 AI Pipeline Controller** which enforces:
+1. Atomic multi-file commits.
+2. Unescaped Dart string interpolation.
+3. Zero-placeholder file integrity.
+4. Live CI/CD failure diagnostics.
+
+---
+*Last Updated via AI Controller: March 2026*
