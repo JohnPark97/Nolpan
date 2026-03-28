@@ -196,20 +196,20 @@ class _GameScreenState extends State<GameScreen> {
     final Offset startPos = startBox.localToGlobal(Offset.zero);
     final Offset endPos = endBox.localToGlobal(Offset.zero);
 
-    // BUGFIX: Dart 3 Strict Null Safety for Overlay
-    late OverlayEntry entry;
+    // V36 BUGFIX: Anti-cyclic nullable overlay pattern
+    OverlayEntry? entry;
     entry = OverlayEntry(
-      builder: (context) => TweenAnimationBuilder<double>(
+      builder: (BuildContext overlayCtx) => TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
         duration: const Duration(milliseconds: 600),
         curve: Curves.easeOutBack,
-        builder: (context, val, child) {
+        builder: (BuildContext tweenCtx, double val, Widget? child) {
           return Positioned(left: startPos.dx + (endPos.dx - startPos.dx) * val, top: startPos.dy + (endPos.dy - startPos.dy) * val, child: _buildTile(color, size: 24));
         },
-        onEnd: () => entry.remove()
+        onEnd: () => entry?.remove()
       )
     );
-    Overlay.of(context)!.insert(entry);
+    Overlay.of(context)?.insert(entry!);
   }
 
   void _playDraftingFlight(GlobalKey startKey, GlobalKey endKey, String color, int count) {
@@ -220,14 +220,14 @@ class _GameScreenState extends State<GameScreen> {
     final Offset startPos = startBox.localToGlobal(Offset.zero);
     final Offset endPos = endBox.localToGlobal(Offset.zero);
 
-    // BUGFIX: Dart 3 Strict Null Safety for Overlay
-    late OverlayEntry entry;
+    // V36 BUGFIX: Anti-cyclic nullable overlay pattern
+    OverlayEntry? entry;
     entry = OverlayEntry(
-      builder: (context) => TweenAnimationBuilder<double>(
+      builder: (BuildContext overlayCtx) => TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOutSine,
-        builder: (context, val, child) {
+        builder: (BuildContext tweenCtx, double val, Widget? child) {
           double dx = startPos.dx + (endPos.dx - startPos.dx) * val;
           double dy = startPos.dy + (endPos.dy - startPos.dy) * val - (math.sin(val * math.pi) * 60);
           return Positioned(
@@ -238,10 +238,10 @@ class _GameScreenState extends State<GameScreen> {
             )
           );
         },
-        onEnd: () => entry.remove()
+        onEnd: () => entry?.remove()
       )
     );
-    Overlay.of(context)!.insert(entry);
+    Overlay.of(context)?.insert(entry!);
   }
 
   Color _getBaseColor(String colorName) {
@@ -451,7 +451,6 @@ class _GameScreenState extends State<GameScreen> {
                                           int slotIdx = cIdx - (4 - rIdx);
                                           int filled = (patternLines[rIdx] as List).where((s) => s != "").length;
                                           
-                                          // BUGFIX: Dart 3 JIT strict cast safety
                                           String rowColor = filled > 0 ? (patternLines[rIdx] as List).firstWhere((s) => s.toString().isNotEmpty).toString() : "";
                                           
                                           int emptyCount = (rIdx + 1) - filled;
