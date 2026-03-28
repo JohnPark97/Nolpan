@@ -143,11 +143,10 @@ class _GameScreenState extends State<GameScreen> {
     boards = Map<String, dynamic>.from(payload['boards'] ?? {});
     activeSelection = Map<String, dynamic>.from(payload['active_selection'] ?? {});
     
-    // BUGFIX: Ghost Deselect Fix - Only clear local state if turn actually changes
     String newTurnPlayer = payload['turn_player'] ?? (boards!.isNotEmpty ? boards!.keys.first : "...");
     bool turnChanged = turnPlayer != newTurnPlayer;
     turnPlayer = newTurnPlayer;
-    
+
     setState(() {
       if (turnChanged) {
         heldColor = null; heldKilnIdx = null; heldCount = null; hoveredRow = null;
@@ -194,6 +193,7 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  // TICKET #2 FIX: Removed UI-blocking Overlay Flight. Replaced with instantaneous data sync + CSS elastic Pop-In.
   void _commitTurn(int targetRow) {
     if (heldColor == null || heldKilnIdx == null) return;
     HapticFeedback.mediumImpact();
@@ -262,8 +262,11 @@ class _GameScreenState extends State<GameScreen> {
       ),
     );
     
+    // TICKET #2 FIX: Elastic Cross-Fade Pop-In
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 350),
+      switchInCurve: Curves.easeOutBack,
+      switchOutCurve: Curves.easeIn,
       transitionBuilder: (Widget child, Animation<double> animation) => ScaleTransition(scale: animation, child: child),
       child: Container(key: ValueKey(colorName + empty.toString() + isGhost.toString()), child: tile),
     );
@@ -474,7 +477,6 @@ class _GameScreenState extends State<GameScreen> {
                                 ),
                               ),
                               _buildBonusTrackers(oppWall, isOpp: true),
-                              // BUGFIX: Increased Opponent Penalty Size (14px with 2px gaps)
                               const SizedBox(height: 8),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -682,7 +684,17 @@ class _GameScreenState extends State<GameScreen> {
                                                     if (_showSlide && slotIdx == rIdx && _scoringRows.contains(rIdx)) { 
                                                       tileW = _buildTile("", size: 24, empty: true);
                                                     } else if (_showShatter && slotIdx < rIdx && _scoringRows.contains(rIdx)) { 
-                                                      tileW = AnimatedOpacity(opacity: _showShatter ? 0.0 : 1.0, duration: const Duration(milliseconds: 500), child: tileW);
+                                                      // TICKET #1 FIX: AnimatedScale makes the tiles physically shrink away instead of just flashing out.
+                                                      tileW = AnimatedScale(
+                                                        scale: _showShatter ? 0.0 : 1.0,
+                                                        duration: const Duration(milliseconds: 400),
+                                                        curve: Curves.easeInBack,
+                                                        child: AnimatedOpacity(
+                                                          opacity: _showShatter ? 0.0 : 1.0, 
+                                                          duration: const Duration(milliseconds: 400), 
+                                                          child: tileW
+                                                        )
+                                                      );
                                                     }
                                                   }
                                                   
@@ -750,7 +762,16 @@ class _GameScreenState extends State<GameScreen> {
                                       
                                       Widget tileW = _buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor);
                                       if (_showShatter && t != "") {
-                                        tileW = AnimatedOpacity(opacity: _showShatter ? 0.0 : 1.0, duration: const Duration(milliseconds: 500), child: tileW);
+                                        tileW = AnimatedScale(
+                                          scale: _showShatter ? 0.0 : 1.0,
+                                          duration: const Duration(milliseconds: 400),
+                                          curve: Curves.easeInBack,
+                                          child: AnimatedOpacity(
+                                            opacity: _showShatter ? 0.0 : 1.0, 
+                                            duration: const Duration(milliseconds: 400), 
+                                            child: tileW
+                                          )
+                                        );
                                       }
                                       return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Column(mainAxisSize: MainAxisSize.min, children: [SizedBox(width: 27, height: 27, child: Stack(alignment: Alignment.center, children:[Positioned(child: tileW)])), const SizedBox(height: 4), Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))]));
                                     }),
