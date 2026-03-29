@@ -7,6 +7,23 @@ import 'sandbox.dart';
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
+  // SPRINT 16.2: Premium Tile Stack Logo Graphic
+  Widget _buildLogoTile(Color color, IconData icon, double yOffset) {
+    return Transform.translate(
+      offset: Offset(0, yOffset),
+      child: Container(
+        width: 56, height: 56,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [BoxShadow(color: Colors.black26, offset: Offset(0, 6), blurRadius: 8)],
+          border: const Border(bottom: BorderSide(color: Colors.black12, width: 4))
+        ),
+        child: Center(child: Icon(icon, color: Colors.white.withOpacity(0.8), size: 32)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -20,18 +37,27 @@ class WelcomeScreen extends StatelessWidget {
             children: [
               const Spacer(),
               
-              // App Branding
-              const Icon(Icons.grid_view_rounded, size: 80, color: tTeal),
-              const SizedBox(height: 24),
+              // App Branding Overhaul
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildLogoTile(tTeal, Icons.star, -4.0),
+                  const SizedBox(width: 12),
+                  _buildLogoTile(const Color(0xFF8E44AD), Icons.diamond, 4.0),
+                  const SizedBox(width: 12),
+                  _buildLogoTile(tGold, Icons.circle, -2.0),
+                ],
+              ),
+              const SizedBox(height: 36),
               const Text(
                 "NOLPAN",
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: 8, color: tInk),
+                style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900, letterSpacing: 10, color: tInk),
               ),
               const Text(
-                "TABLETOP ENGINE",
+                "MOSAIC DRAFT",
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 4, color: Colors.grey),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 6, color: tTeal),
               ),
               
               const Spacer(),
@@ -59,7 +85,7 @@ class WelcomeScreen extends StatelessWidget {
               ),
               
               const Spacer(),
-              const Text("v16.1 • Live Production", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
+              const Text("v16.2 • Arcade Premium UI", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
             ],
           ),
         ),

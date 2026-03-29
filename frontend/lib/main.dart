@@ -17,7 +17,7 @@ const Color tIce = Color(0xFFE0E5EC);
 void main() {
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
-    initialRoute: '/', // RESTORED BOOT TO WELCOME SCREEN
+    initialRoute: '/',
     routes: {
       '/': (context) => const WelcomeScreen(),
       '/sandbox': (context) => const SandboxScreen(),
@@ -52,7 +52,9 @@ class _PhysicsButtonState extends State<PhysicsButton> {
   bool _isPressed = false;
   @override
   Widget build(BuildContext context) {
-    Color contentColor = widget.color == Colors.white || widget.color == tSurface ? tInk : Colors.white;
+    // Dynamically adjust text color based on button background (handles new Grey disabled state)
+    Color contentColor = (widget.color == Colors.white || widget.color == tSurface || widget.color == Colors.grey[300]) ? tInk : Colors.white;
+    
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) { setState(() => _isPressed = false); widget.onTap(); },
@@ -60,14 +62,15 @@ class _PhysicsButtonState extends State<PhysicsButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
         curve: const Cubic(0.2, 0.8, 0.2, 1),
-        margin: EdgeInsets.only(top: _isPressed ? 4 : 0, bottom: _isPressed ? 0 : 4),
+        // SPRINT 16.2: Thicker Arcade Button Travel (6px)
+        margin: EdgeInsets.only(top: _isPressed ? 6 : 0, bottom: _isPressed ? 0 : 6),
         width: widget.isFullWidth ? double.infinity : null,
         height: 60,
         padding: widget.isFullWidth ? null : const EdgeInsets.symmetric(horizontal: 24),
         decoration: BoxDecoration(
           color: widget.color,
           borderRadius: BorderRadius.circular(widget.isFullWidth ? 12 : 999),
-          border: Border(bottom: BorderSide(color: _isPressed ? Colors.transparent : widget.shadowColor, width: 4)),
+          border: Border(bottom: BorderSide(color: _isPressed ? Colors.transparent : widget.shadowColor, width: _isPressed ? 0 : 6)),
         ),
         child: Center(
           child: widget.customChild ?? Text(

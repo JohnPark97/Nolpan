@@ -395,6 +395,8 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
   }
 
   Widget _buildLobby() {
+    bool canStart = _localPlayers.length >= 2;
+
     return Center(
       child: Container(
         margin: const EdgeInsets.all(24), 
@@ -443,8 +445,8 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                           decoration: InputDecoration(
                             contentPadding: const EdgeInsets.all(0),
                             hintText: "Name",
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: tTeal, width: 2)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: tTeal, width: 2)),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF8E44AD), width: 2)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF8E44AD), width: 2)),
                           ),
                           onSubmitted: (val) {
                             if (val.trim().isNotEmpty) {
@@ -463,8 +465,12 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                         child: Container(
                           margin: const EdgeInsets.symmetric(horizontal: 6), 
                           width: 40, height: 40, 
-                          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.grey[300]!, width: 2)), 
-                          child: const Icon(Icons.add, color: Colors.grey)
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle, 
+                            color: Color(0xFF8E44AD), // SPRINT 16.2: Amethyst Pop
+                            boxShadow: [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]
+                          ), 
+                          child: const Icon(Icons.add, color: Colors.white, size: 24)
                         ),
                       );
                     }
@@ -472,19 +478,23 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                     return Container(
                       margin: const EdgeInsets.symmetric(horizontal: 6), 
                       width: 40, height: 40, 
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.grey[100])
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle, 
+                        color: Colors.transparent, // SPRINT 16.2: Hollow Slot
+                        border: Border.all(color: Colors.grey[400]!, width: 2)
+                      )
                     );
                   }
                 }),
               ),
             ),
             const SizedBox(height: 48),
-            Opacity(
-              opacity: _localPlayers.length >= 2 ? 1.0 : 0.5,
-              child: PhysicsButton(
-                text: "START MATCH", color: tTeal, shadowColor: const Color(0xFF1E7066),
-                onTap: () { if (_localPlayers.length >= 2) _startLocalGame(); }
-              ),
+            // SPRINT 16.2: Proper Grey Disabled State
+            PhysicsButton(
+              text: "START MATCH", 
+              color: canStart ? tTeal : Colors.grey[300]!, 
+              shadowColor: canStart ? const Color(0xFF1E7066) : Colors.grey[400]!,
+              onTap: () { if (canStart) _startLocalGame(); }
             )
           ],
         )
