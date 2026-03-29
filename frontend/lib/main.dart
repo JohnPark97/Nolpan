@@ -17,7 +17,7 @@ const Color tIce = Color(0xFFE0E5EC);
 void main() {
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
-    initialRoute: '/local', // Boot directly to offline QA
+    initialRoute: '/local',
     routes: {
       '/': (context) => const WelcomeScreen(),
       '/sandbox': (context) => const SandboxScreen(),
