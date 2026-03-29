@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
-import 'gateway.dart';
+import 'lobby.dart';
+import 'local_play.dart';
+import 'sandbox.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -12,13 +15,51 @@ class WelcomeScreen extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(child: Center(child: Text("NOLPAN", style: TextStyle(fontSize: 64, fontWeight: FontWeight.w900, color: tInk, letterSpacing: 4)))),
-              PhysicsButton(text: "Play Online", color: tTeal, shadowColor: const Color(0xFF1A695F), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GatewayScreen()))),
+              const Spacer(),
+              
+              // App Branding
+              const Icon(Icons.grid_view_rounded, size: 80, color: tTeal),
+              const SizedBox(height: 24),
+              const Text(
+                "NOLPAN",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: 8, color: tInk),
+              ),
+              const Text(
+                "TABLETOP ENGINE",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 4, color: Colors.grey),
+              ),
+              
+              const Spacer(),
+
+              // Navigation Buttons
+              PhysicsButton(
+                text: "PLAY ONLINE",
+                color: tTeal,
+                shadowColor: const Color(0xFF1E7066),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LobbyScreen())),
+              ),
               const SizedBox(height: 16),
-              PhysicsButton(text: "Pass & Play (Offline)", color: tTerra, shadowColor: const Color(0xFFA84128), onTap: () {}),
-              const SizedBox(height: 32),
-              Text("v1.0 - Purely for friends. No strangers. Always free.", style: TextStyle(fontSize: 10, color: tInk.withOpacity(0.5))),
+              PhysicsButton(
+                text: "PASS & PLAY",
+                color: tGold,
+                shadowColor: const Color(0xFFB59A53),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LocalPlayScreen())),
+              ),
+              const SizedBox(height: 16),
+              PhysicsButton(
+                text: "ANIMATION SANDBOX",
+                color: tIce,
+                shadowColor: const Color(0xFFB5BBC4),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SandboxScreen())),
+              ),
+              
+              const Spacer(),
+              const Text("v16.1 • Live Production", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
             ],
           ),
         ),

@@ -17,7 +17,7 @@ const Color tIce = Color(0xFFE0E5EC);
 void main() {
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
-    initialRoute: '/local',
+    initialRoute: '/', // RESTORED BOOT TO WELCOME SCREEN
     routes: {
       '/': (context) => const WelcomeScreen(),
       '/sandbox': (context) => const SandboxScreen(),
