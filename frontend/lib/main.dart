@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'socket_service.dart';
 import 'screens/welcome.dart';
 import 'screens/sandbox.dart';
+import 'screens/local_play.dart';
 
 final socketService = SocketService();
 
@@ -16,10 +17,11 @@ const Color tIce = Color(0xFFE0E5EC);
 void main() {
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
-    initialRoute: '/',
+    initialRoute: '/local', // Boot directly to offline QA
     routes: {
       '/': (context) => const WelcomeScreen(),
       '/sandbox': (context) => const SandboxScreen(),
+      '/local': (context) => const LocalPlayScreen(),
     },
   ));
 }
@@ -51,7 +53,6 @@ class _PhysicsButtonState extends State<PhysicsButton> {
   @override
   Widget build(BuildContext context) {
     Color contentColor = widget.color == Colors.white || widget.color == tSurface ? tInk : Colors.white;
-
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) { setState(() => _isPressed = false); widget.onTap(); },
