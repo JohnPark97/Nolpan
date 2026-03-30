@@ -28,7 +28,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   @override
   void initState() {
     super.initState();
-    // V56 BUGFIX: Provide the required WebSocket URL argument to the connect method.
+    // V57 BUGFIX: Provide the required WebSocket URL argument to the connect method.
     socketService.connect('wss://nolpan.onrender.com/ws');
     
     _sub = socketService.stream.listen((msg) {
