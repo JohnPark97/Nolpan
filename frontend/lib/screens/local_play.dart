@@ -23,7 +23,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
   List<String> _localPlayers = [];
   bool _isAddingPlayer = false;
   final TextEditingController _nameCtrl = TextEditingController();
-  final FocusNode _nameFocusNode = FocusNode(); 
+  final FocusNode _nameFocusNode = FocusNode();
 
   final List<Color> _avatarColors = [tTeal, tTerra, tGold, tInk];
 
@@ -49,9 +49,11 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
   @override
   void initState() {
     super.initState();
-    // SPRINT 16.5: Auto-Save on Focus Loss (Tap outside)
+    // SPRINT 16.6: Invisible Overlay Focus Listener
     _nameFocusNode.addListener(() {
-      if (!_nameFocusNode.hasFocus && _isAddingPlayer) {
+      if (_nameFocusNode.hasFocus && !_isAddingPlayer) {
+        setState(() => _isAddingPlayer = true);
+      } else if (!_nameFocusNode.hasFocus && _isAddingPlayer) {
         _submitName();
       }
     });
@@ -64,7 +66,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     super.dispose();
   }
 
-  // SPRINT 16.5: Reusable submit function
   void _submitName() {
     if (!mounted) return;
     String val = _nameCtrl.text.trim();
@@ -75,6 +76,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
       _isAddingPlayer = false;
       _nameCtrl.clear();
     });
+    FocusScope.of(context).unfocus();
   }
 
   void _startLocalGame() {
@@ -539,81 +541,110 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
   Widget _buildLobby() {
     bool canStart = _localPlayers.length >= 2;
 
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.all(24), 
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: Colors.white, 
-          borderRadius: BorderRadius.circular(24), 
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20)]
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.people, size: 48, color: tTeal),
-            const SizedBox(height: 16),
-            const Text("OFFLINE LOBBY", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: tInk)),
-            const SizedBox(height: 32),
-            SizedBox(
-              height: 70,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: List.generate(4, (i) {
-                  if (i < _localPlayers.length) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              CircleAvatar(
-                                radius: 20, 
-                                backgroundColor: _avatarColors[i % 4], 
-                                child: Text(_localPlayers[i][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
-                              ),
-                              Positioned(
-                                right: -4, top: -4,
-                                child: GestureDetector(
-                                  onTap: () => setState(() => _localPlayers.removeAt(i)),
-                                  child: Container(
-                                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                                    child: const Icon(Icons.remove_circle, color: tTerra, size: 16)
-                                  )
-                                )
-                              )
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(_localPlayers[i], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tInk))
-                        ],
-                      ),
-                    );
-                  } else if (i == _localPlayers.length && _localPlayers.length < 4) {
-                    if (_isAddingPlayer) {
+    // SPRINT 16.6: Top-Level Unfocus Detector to enable clicking away to save
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.all(24), 
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white, 
+            borderRadius: BorderRadius.circular(24), 
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20)]
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.people, size: 48, color: tTeal),
+              const SizedBox(height: 16),
+              const Text("OFFLINE LOBBY", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: tInk)),
+              const SizedBox(height: 32),
+              SizedBox(
+                height: 70,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: List.generate(4, (i) {
+                    if (i < _localPlayers.length) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 6),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              width: 100, height: 40,
-                              child: TextField(
-                                controller: _nameCtrl,
-                                focusNode: _nameFocusNode,
-                                autofocus: true,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                decoration: InputDecoration(
-                                  contentPadding: const EdgeInsets.all(0),
-                                  hintText: "Name",
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF8E44AD), width: 2)),
-                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF8E44AD), width: 2)),
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                CircleAvatar(
+                                  radius: 20, 
+                                  backgroundColor: _avatarColors[i % 4], 
+                                  child: Text(_localPlayers[i][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
                                 ),
-                                onSubmitted: (_) => _submitName(),
+                                Positioned(
+                                  right: -4, top: -4,
+                                  child: GestureDetector(
+                                    onTap: () => setState(() => _localPlayers.removeAt(i)),
+                                    child: Container(
+                                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                      child: const Icon(Icons.remove_circle, color: tTerra, size: 16)
+                                    )
+                                  )
+                                )
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(_localPlayers[i], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tInk))
+                          ],
+                        ),
+                      );
+                    } else if (i == _localPlayers.length && _localPlayers.length < 4) {
+                      // SPRINT 16.6: Invisible Overlay Input Trick
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOutBack,
+                              width: _isAddingPlayer ? 100 : 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: _isAddingPlayer ? Colors.white : const Color(0xFF8E44AD),
+                                borderRadius: BorderRadius.circular(20),
+                                border: _isAddingPlayer ? Border.all(color: const Color(0xFF8E44AD), width: 2) : null,
+                                boxShadow: _isAddingPlayer ? [] : [const BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)],
+                              ),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  AnimatedOpacity(
+                                    opacity: _isAddingPlayer ? 0.0 : 1.0,
+                                    duration: const Duration(milliseconds: 150),
+                                    child: const Icon(Icons.add, color: Colors.white, size: 24),
+                                  ),
+                                  TextField(
+                                    controller: _nameCtrl,
+                                    focusNode: _nameFocusNode,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 12, 
+                                      fontWeight: FontWeight.bold, 
+                                      color: _isAddingPlayer ? tInk : Colors.transparent
+                                    ),
+                                    cursorColor: _isAddingPlayer ? const Color(0xFF8E44AD) : Colors.transparent,
+                                    decoration: InputDecoration(
+                                      contentPadding: const EdgeInsets.only(bottom: 12),
+                                      border: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      hintText: _isAddingPlayer ? "Name" : "",
+                                      hintStyle: TextStyle(color: _isAddingPlayer ? Colors.grey : Colors.transparent, fontSize: 12),
+                                    ),
+                                    onSubmitted: (_) => _submitName(),
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -627,65 +658,34 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            GestureDetector(
-                              onTap: () {
-                                setState(() => _isAddingPlayer = true);
-                                WidgetsBinding.instance.addPostFrameCallback((_) {
-                                  if (mounted) {
-                                    _nameFocusNode.requestFocus();
-                                    SystemChannels.textInput.invokeMethod('TextInput.show');
-                                  }
-                                });
-                              },
-                              child: Container(
-                                width: 40, height: 40, 
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle, 
-                                  color: Color(0xFF8E44AD), 
-                                  boxShadow: [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]
-                                ), 
-                                child: const Icon(Icons.add, color: Colors.white, size: 24)
-                              ),
+                            Container(
+                              width: 40, height: 40, 
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle, 
+                                color: Colors.transparent, 
+                                border: Border.all(color: Colors.grey[400]!, width: 2)
+                              )
                             ),
                             const SizedBox(height: 4),
                             const Text("", style: TextStyle(fontSize: 10))
-                          ],
-                        ),
+                          ]
+                        )
                       );
                     }
-                  } else {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 40, height: 40, 
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle, 
-                              color: Colors.transparent, 
-                              border: Border.all(color: Colors.grey[400]!, width: 2)
-                            )
-                          ),
-                          const SizedBox(height: 4),
-                          const Text("", style: TextStyle(fontSize: 10))
-                        ]
-                      )
-                    );
-                  }
-                }),
+                  }),
+                ),
               ),
-            ),
-            const SizedBox(height: 48),
-            PhysicsButton(
-              text: "START MATCH", 
-              color: canStart ? tTeal : Colors.grey[300]!, 
-              shadowColor: canStart ? const Color(0xFF1E7066) : Colors.grey[400]!,
-              onTap: () { if (canStart) _startLocalGame(); }
-            )
-          ],
+              const SizedBox(height: 48),
+              PhysicsButton(
+                text: "START MATCH", 
+                color: canStart ? tTeal : Colors.grey[300]!, 
+                shadowColor: canStart ? const Color(0xFF1E7066) : Colors.grey[400]!,
+                onTap: () { if (canStart) _startLocalGame(); }
+              )
+            ],
+          )
         )
-      )
+      ),
     );
   }
 
@@ -734,7 +734,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
             const SizedBox(height: 16),
             PhysicsButton(text: "PLAY AGAIN", color: tTeal, shadowColor: const Color(0xFF1E7066), onTap: _startLocalGame),
             const SizedBox(height: 16),
-            // SPRINT 16.5: PRESERVED MEMORY (Removed _localPlayers.clear())
             PhysicsButton(text: "EXIT TO LOBBY", color: tTerra, shadowColor: const Color(0xFFB3563F), onTap: () => setState(() { _inLobby = true; _isReviewingBoard = false; })),
           ]
         )
