@@ -1,73 +1,229 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
-// --- DATA MODELS ---
+// --- 1. STRICT DATA MODELS ---
 
-class GemType {
+enum GemType { emerald, amethyst, yellow, ruby, sapphire, gold }
+
+extension GemTypeExt on GemType {
+  Color get color {
+    switch (this) {
+      case GemType.emerald: return const Color(0xFF2A9D8F);
+      case GemType.amethyst: return const Color(0xFF8E44AD);
+      case GemType.yellow: return const Color(0xFFE9C46A);
+      case GemType.ruby: return const Color(0xFFE76F51);
+      case GemType.sapphire: return const Color(0xFF264653);
+      case GemType.gold: return const Color(0xFFD4AF37);
+    }
+  }
+  String get textIcon {
+    switch (this) {
+      case GemType.emerald: return '★';
+      case GemType.amethyst: return '♦';
+      case GemType.yellow: return '●';
+      case GemType.ruby: return '≡';
+      case GemType.sapphire: return '✖';
+      case GemType.gold: return 'W';
+    }
+  }
+  Gradient? get gradient {
+    if (this == GemType.gold) {
+      return const LinearGradient(colors: [Color(0xFFF1C40F), Color(0xFFB8860B)], begin: Alignment.topLeft, end: Alignment.bottomRight);
+    }
+    return null;
+  }
+}
+
+class MarketCard {
+  final int id;
+  final int tier;
+  final int points; 
+  final GemType provides;
+  final Map<GemType, int> costs;
+
+  const MarketCard({required this.id, required this.tier, required this.points, required this.provides, required this.costs});
+}
+
+class PlayerState {
   final String name;
-  final Color color;
-  final IconData? icon;
-  final String? textIcon;
-  final Gradient? gradient;
+  final String avatar;
+  int score = 0;
+  
+  Map<GemType, int> engine = {
+    GemType.emerald: 0, GemType.amethyst: 0, GemType.yellow: 0,
+    GemType.ruby: 0, GemType.sapphire: 0
+  };
 
-  const GemType(this.name, this.color, {this.icon, this.textIcon, this.gradient});
+  Map<GemType, int> wallet = {
+    GemType.emerald: 0, GemType.amethyst: 0, GemType.yellow: 0,
+    GemType.ruby: 0, GemType.sapphire: 0, GemType.gold: 0
+  };
+  
+  List<MarketCard> reservedCards = [];
+
+  PlayerState(this.name, this.avatar);
 }
 
-class GemPalette {
-  static const GemType teal = GemType('Emerald', Color(0xFF2A9D8F), icon: Icons.star);
-  static const GemType amethyst = GemType('Amethyst', Color(0xFF8E44AD), icon: Icons.diamond);
-  static const GemType yellow = GemType('Gold', Color(0xFFE9C46A), icon: Icons.circle);
-  static const GemType red = GemType('Ruby', Color(0xFFE76F51), icon: Icons.menu);
-  static const GemType blue = GemType('Sapphire', Color(0xFF264653), icon: Icons.close);
-  static const GemType wild = GemType(
-    'Wild', 
-    Color(0xFFD4AF37), 
-    textIcon: 'W',
-    gradient: LinearGradient(colors: [Color(0xFFF1C40F), Color(0xFFB8860B)], begin: Alignment.topLeft, end: Alignment.bottomRight)
-  );
-
-  static const List<GemType> stdGems = [teal, amethyst, yellow, red, blue];
-}
-
-class Cost {
-  final GemType gem;
-  final int count;
-  const Cost(this.gem, this.count);
-}
 
 // --- MAIN SCREEN ---
 
-class GemCrafterScreen extends StatelessWidget {
+class GemCrafterScreen extends StatefulWidget {
   const GemCrafterScreen({super.key});
 
   @override
+  State<GemCrafterScreen> createState() => _GemCrafterScreenState();
+}
+
+class _GemCrafterScreenState extends State<GemCrafterScreen> {
+  
+  // STATE ENGINE
+  late List<PlayerState> _players;
+  int _turnIndex = 0;
+
+  Map<GemType, int> _bank = {
+    GemType.emerald: 4, GemType.amethyst: 2, GemType.yellow: 5,
+    GemType.ruby: 4, GemType.sapphire: 0, GemType.gold: 5
+  };
+
+  List<MarketCard> _market = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeTests();
+  }
+
+  void _initializeTests() {
+    // 4. UNIT TEST SETUP
+    
+    // Player 1 (Jahn) - Proof 1: Engine Discount
+    PlayerState p1 = PlayerState("Jahn", "J");
+    p1.engine[GemType.ruby] = 2;
+    p1.wallet[GemType.ruby] = 1;
+
+    // Player 2 (Bee) - Proof 2: Wildcard Fallback
+    PlayerState p2 = PlayerState("Bee", "B");
+    p2.wallet[GemType.gold] = 2; // 0 Emeralds, but 2 Golds
+    p2.wallet[GemType.emerald] = 0;
+
+    _players = [p1, p2];
+
+    // Card 1: Tests P1's Engine+Token combo
+    MarketCard testCard1 = const MarketCard(id: 1, tier: 1, points: 2, provides: GemType.sapphire, costs: {GemType.ruby: 3});
+    // Card 2: Tests P2's Gold Wildcard combo
+    MarketCard testCard2 = const MarketCard(id: 2, tier: 1, points: 0, provides: GemType.ruby, costs: {GemType.emerald: 2});
+
+    _market = [
+      testCard1, testCard2,
+      const MarketCard(id: 3, tier: 1, points: 0, provides: GemType.emerald, costs: {GemType.sapphire: 1, GemType.amethyst: 2}),
+      const MarketCard(id: 4, tier: 1, points: 0, provides: GemType.amethyst, costs: {GemType.yellow: 2, GemType.ruby: 2}),
+      const MarketCard(id: 5, tier: 2, points: 2, provides: GemType.yellow, costs: {GemType.emerald: 4, GemType.sapphire: 2}),
+      const MarketCard(id: 6, tier: 2, points: 1, provides: GemType.ruby, costs: {GemType.yellow: 3, GemType.amethyst: 2}),
+      const MarketCard(id: 7, tier: 2, points: 2, provides: GemType.sapphire, costs: {GemType.ruby: 5}),
+      const MarketCard(id: 8, tier: 2, points: 2, provides: GemType.amethyst, costs: {GemType.emerald: 4, GemType.ruby: 1}),
+      const MarketCard(id: 9, tier: 3, points: 4, provides: GemType.sapphire, costs: {GemType.amethyst: 6, GemType.ruby: 3}),
+      const MarketCard(id: 10, tier: 3, points: 5, provides: GemType.emerald, costs: {GemType.emerald: 7, GemType.yellow: 3}),
+      const MarketCard(id: 11, tier: 3, points: 3, provides: GemType.amethyst, costs: {GemType.sapphire: 5, GemType.ruby: 3}),
+      const MarketCard(id: 12, tier: 3, points: 4, provides: GemType.ruby, costs: {GemType.amethyst: 7}),
+    ];
+  }
+
+  // --- 2. THE AFFORDABILITY CALCULATOR ---
+  bool _canAfford(MarketCard card, PlayerState player) {
+    int wildTokensNeeded = 0;
+    
+    card.costs.forEach((gemType, costRequired) {
+      // Step A (The Discount)
+      int deficit = costRequired - (player.engine[gemType] ?? 0);
+      
+      if (deficit > 0) {
+        // Step B (The Wallet)
+        int remainingDeficit = deficit - (player.wallet[gemType] ?? 0);
+        if (remainingDeficit > 0) {
+          wildTokensNeeded += remainingDeficit;
+        }
+      }
+    });
+    
+    // Step C (The Gold Check)
+    return (player.wallet[GemType.gold] ?? 0) >= wildTokensNeeded;
+  }
+
+  // --- 3. THE PURCHASE TRANSACTION ---
+  void _purchaseCard(MarketCard card) {
+    PlayerState player = _players[_turnIndex];
+    if (!_canAfford(card, player)) return; // Failsafe
+
+    int wildTokensUsed = 0;
+
+    // Deduct Tokens
+    card.costs.forEach((gemType, costRequired) {
+      int deficit = costRequired - (player.engine[gemType] ?? 0);
+      if (deficit > 0) {
+        int available = player.wallet[gemType] ?? 0;
+        if (available >= deficit) {
+          player.wallet[gemType] = available - deficit;
+          _bank[gemType] = (_bank[gemType] ?? 0) + deficit;
+        } else {
+          player.wallet[gemType] = 0;
+          _bank[gemType] = (_bank[gemType] ?? 0) + available;
+          int wildNeeded = deficit - available;
+          wildTokensUsed += wildNeeded;
+        }
+      }
+    });
+
+    // Handle Gold Usage
+    if (wildTokensUsed > 0) {
+      player.wallet[GemType.gold] = (player.wallet[GemType.gold] ?? 0) - wildTokensUsed;
+      _bank[GemType.gold] = (_bank[GemType.gold] ?? 0) + wildTokensUsed;
+    }
+
+    // Upgrade Engine & Score
+    player.engine[card.provides] = (player.engine[card.provides] ?? 0) + 1;
+    player.score += card.points;
+
+    // Clear Card (Basic replace for prototype)
+    int cardIndex = _market.indexOf(card);
+    if (cardIndex != -1) {
+      _market[cardIndex] = MarketCard(
+        id: math.Random().nextInt(1000), 
+        tier: card.tier, 
+        points: 0, 
+        provides: GemType.emerald, 
+        costs: {GemType.sapphire: 1, GemType.yellow: 1}
+      );
+    }
+
+    // End Turn
+    setState(() {
+      _turnIndex = (_turnIndex + 1) % _players.length;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    PlayerState currentPlayer = _players[_turnIndex];
+    List<PlayerState> opponents = _players.where((p) => p != currentPlayer).toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF9F7F3),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 1. THE SKY (flex-shrink-0)
-            _buildSky(),
-            
-            // 2. THE PENTHOUSE (flex-shrink-0)
+            _buildSky(opponents, currentPlayer.name),
             _buildNobles(),
-
-            // 3. THE MARKET (flex-1 min-h-0)
-            Expanded(child: _buildMarket()),
-
-            // 4. THE BANK (flex-shrink-0)
+            Expanded(child: _buildMarket(currentPlayer)),
             _buildBank(),
-
-            // 5. THE DASHBOARD (flex-shrink-0)
-            _buildDashboard(),
+            _buildDashboard(currentPlayer),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSky() {
+  Widget _buildSky(List<PlayerState> opponents, String currName) {
     return Container(
       padding: const EdgeInsets.only(top: 8, left: 12, right: 12, bottom: 4),
       child: Column(
@@ -78,18 +234,19 @@ class GemCrafterScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(color: const Color(0xFF2A9D8F), borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0,1), blurRadius: 2)]),
-                child: const Text("CURRENT TURN: PLAYER 1", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                child: Text("CURRENT TURN: ${currName.toUpperCase()}", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
               ),
               Text("GEM CRAFTER", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey[400], letterSpacing: 2)),
             ],
           ),
           const SizedBox(height: 6),
-          const Row(
-            children: [
-              Expanded(child: OpponentCard(name: "Jahn", avatar: "J", score: 14, engine: [2, 0, 4, 1, 0], wallet: [1, 0, 2, 0, 0, 1])),
-              SizedBox(width: 6),
-              Expanded(child: OpponentCard(name: "Bee", avatar: "B", score: 8, engine: [0, 3, 1, 2, 2], wallet: [0, 2, 0, 1, 1, 0])),
-            ],
+          Row(
+            children: opponents.map((opp) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 6.0),
+                child: OpponentCard(player: opp),
+              )
+            )).toList(),
           )
         ],
       ),
@@ -102,22 +259,21 @@ class GemCrafterScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: const [
-          NobleTile(points: 3, req: [Cost(GemPalette.teal, 4), Cost(GemPalette.amethyst, 4)]),
+          NobleTile(points: 3, req: {GemType.emerald: 4, GemType.amethyst: 4}),
           SizedBox(width: 8),
-          NobleTile(points: 3, req: [Cost(GemPalette.red, 3), Cost(GemPalette.blue, 3), Cost(GemPalette.yellow, 3)]),
+          NobleTile(points: 3, req: {GemType.ruby: 3, GemType.sapphire: 3, GemType.yellow: 3}),
           SizedBox(width: 8),
-          NobleTile(points: 3, req: [Cost(GemPalette.amethyst, 4), Cost(GemPalette.blue, 4)]),
+          NobleTile(points: 3, req: {GemType.amethyst: 4, GemType.sapphire: 4}),
         ],
       ),
     );
   }
 
-  Widget _buildMarket() {
+  Widget _buildMarket(PlayerState currentPlayer) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Row(
         children: [
-          // Decks Column
           SizedBox(
             width: 48,
             child: Column(
@@ -131,49 +287,51 @@ class GemCrafterScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          // Cards Grid
           Expanded(
             child: Column(
               children: [
                 Expanded(
                   child: Row(
-                    children: const [
-                      Expanded(child: MarketCard(gem: GemPalette.blue, points: 4, costs: [Cost(GemPalette.amethyst, 6), Cost(GemPalette.red, 3)])),
-                      SizedBox(width: 6),
-                      Expanded(child: MarketCard(gem: GemPalette.teal, points: 5, costs: [Cost(GemPalette.teal, 7), Cost(GemPalette.yellow, 3)])),
-                      SizedBox(width: 6),
-                      Expanded(child: MarketCard(gem: GemPalette.amethyst, points: 3, costs: [Cost(GemPalette.blue, 5), Cost(GemPalette.red, 3)])),
-                      SizedBox(width: 6),
-                      Expanded(child: MarketCard(gem: GemPalette.red, points: 4, costs: [Cost(GemPalette.amethyst, 7)])),
-                    ],
+                    children: _market.sublist(8, 12).map((c) => Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6.0),
+                        child: MarketCardWidget(
+                          card: c, 
+                          affordable: _canAfford(c, currentPlayer),
+                          onTap: () => _purchaseCard(c)
+                        ),
+                      )
+                    )).toList(),
                   ),
                 ),
                 const SizedBox(height: 6),
                 Expanded(
                   child: Row(
-                    children: const [
-                      Expanded(child: MarketCard(gem: GemPalette.yellow, points: 2, costs: [Cost(GemPalette.teal, 4), Cost(GemPalette.blue, 2)])),
-                      SizedBox(width: 6),
-                      Expanded(child: MarketCard(gem: GemPalette.red, points: 1, costs: [Cost(GemPalette.yellow, 3), Cost(GemPalette.amethyst, 2)])),
-                      SizedBox(width: 6),
-                      Expanded(child: MarketCard(gem: GemPalette.blue, points: 2, costs: [Cost(GemPalette.red, 5)])),
-                      SizedBox(width: 6),
-                      Expanded(child: MarketCard(gem: GemPalette.amethyst, points: 2, costs: [Cost(GemPalette.teal, 4), Cost(GemPalette.red, 1)])),
-                    ],
+                    children: _market.sublist(4, 8).map((c) => Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6.0),
+                        child: MarketCardWidget(
+                          card: c, 
+                          affordable: _canAfford(c, currentPlayer),
+                          onTap: () => _purchaseCard(c)
+                        ),
+                      )
+                    )).toList(),
                   ),
                 ),
                 const SizedBox(height: 6),
                 Expanded(
                   child: Row(
-                    children: const [
-                      Expanded(child: MarketCard(gem: GemPalette.teal, points: 0, costs: [Cost(GemPalette.blue, 1), Cost(GemPalette.amethyst, 2)])),
-                      SizedBox(width: 6),
-                      Expanded(child: MarketCard(gem: GemPalette.amethyst, points: 0, costs: [Cost(GemPalette.yellow, 2), Cost(GemPalette.red, 2)])),
-                      SizedBox(width: 6),
-                      Expanded(child: MarketCard(gem: GemPalette.red, points: 0, costs: [Cost(GemPalette.teal, 1), Cost(GemPalette.amethyst, 3)])),
-                      SizedBox(width: 6),
-                      Expanded(child: MarketCard(gem: GemPalette.blue, points: 0, costs: [Cost(GemPalette.yellow, 1), Cost(GemPalette.teal, 1), Cost(GemPalette.red, 1)])),
-                    ],
+                    children: _market.sublist(0, 4).map((c) => Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6.0),
+                        child: MarketCardWidget(
+                          card: c, 
+                          affordable: _canAfford(c, currentPlayer),
+                          onTap: () => _purchaseCard(c)
+                        ),
+                      )
+                    )).toList(),
                   ),
                 ),
               ],
@@ -189,24 +347,24 @@ class GemCrafterScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          BankToken(gem: GemPalette.teal, count: 4),
-          SizedBox(width: 8),
-          BankToken(gem: GemPalette.amethyst, count: 2),
-          SizedBox(width: 8),
-          BankToken(gem: GemPalette.yellow, count: 5),
-          SizedBox(width: 8),
-          BankToken(gem: GemPalette.red, count: 4),
-          SizedBox(width: 8),
-          BankToken(gem: GemPalette.blue, count: 0),
-          SizedBox(width: 8),
-          BankToken(gem: GemPalette.wild, count: 5),
+        children: [
+          BankToken(gem: GemType.emerald, count: _bank[GemType.emerald]!),
+          const SizedBox(width: 8),
+          BankToken(gem: GemType.amethyst, count: _bank[GemType.amethyst]!),
+          const SizedBox(width: 8),
+          BankToken(gem: GemType.yellow, count: _bank[GemType.yellow]!),
+          const SizedBox(width: 8),
+          BankToken(gem: GemType.ruby, count: _bank[GemType.ruby]!),
+          const SizedBox(width: 8),
+          BankToken(gem: GemType.sapphire, count: _bank[GemType.sapphire]!),
+          const SizedBox(width: 8),
+          BankToken(gem: GemType.gold, count: _bank[GemType.gold]!),
         ],
       ),
     );
   }
 
-  Widget _buildDashboard() {
+  Widget _buildDashboard(PlayerState player) {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -223,16 +381,16 @@ class GemCrafterScreen extends StatelessWidget {
                 children: [
                   Text("SCORE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey[400], letterSpacing: 1.5)),
                   const SizedBox(width: 8),
-                  const Text("12", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF2A9D8F), height: 1)),
+                  Text(player.score.toString(), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF2A9D8F), height: 1)),
                 ],
               ),
               Row(
                 children: [
                   Text("RESERVED", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey[400], letterSpacing: 1.5)),
                   const SizedBox(width: 6),
-                  Container(width: 20, height: 28, decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.amber[400]!, width: 2))),
+                  Container(width: 20, height: 28, decoration: BoxDecoration(borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.blueGrey[300]!, style: BorderStyle.solid))),
                   const SizedBox(width: 4),
-                  Container(width: 20, height: 28, decoration: BoxDecoration(color: Colors.blueGrey[50], borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.blueGrey[200]!))),
+                  Container(width: 20, height: 28, decoration: BoxDecoration(borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.blueGrey[300]!, style: BorderStyle.solid))),
                   const SizedBox(width: 4),
                   Container(width: 20, height: 28, decoration: BoxDecoration(borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.blueGrey[300]!, style: BorderStyle.solid))),
                 ],
@@ -241,16 +399,16 @@ class GemCrafterScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Row(
-            children: const [
-              Expanded(child: EngineBlock(gem: GemPalette.teal, count: 4)),
-              SizedBox(width: 6),
-              Expanded(child: EngineBlock(gem: GemPalette.amethyst, count: 2)),
-              SizedBox(width: 6),
-              Expanded(child: EngineBlock(gem: GemPalette.yellow, count: 3)),
-              SizedBox(width: 6),
-              Expanded(child: EngineBlock(gem: GemPalette.red, count: 1)),
-              SizedBox(width: 6),
-              Expanded(child: EngineBlock(gem: GemPalette.blue, count: 2)),
+            children: [
+              Expanded(child: EngineBlock(gem: GemType.emerald, count: player.engine[GemType.emerald]!)),
+              const SizedBox(width: 6),
+              Expanded(child: EngineBlock(gem: GemType.amethyst, count: player.engine[GemType.amethyst]!)),
+              const SizedBox(width: 6),
+              Expanded(child: EngineBlock(gem: GemType.yellow, count: player.engine[GemType.yellow]!)),
+              const SizedBox(width: 6),
+              Expanded(child: EngineBlock(gem: GemType.ruby, count: player.engine[GemType.ruby]!)),
+              const SizedBox(width: 6),
+              Expanded(child: EngineBlock(gem: GemType.sapphire, count: player.engine[GemType.sapphire]!)),
             ],
           ),
           const SizedBox(height: 10),
@@ -263,20 +421,13 @@ class GemCrafterScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text("TOKENS IN HAND", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey[400], letterSpacing: 1.5)),
-                    Text("8 / 10", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey[500])),
+                    Text("${player.wallet.values.fold(0, (sum, item) => sum + item)} / 10", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey[500])),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const WalletToken(gem: GemPalette.teal),
-                    const Align(widthFactor: 0.7, child: WalletToken(gem: GemPalette.teal)),
-                    const Align(widthFactor: 0.7, child: WalletToken(gem: GemPalette.amethyst)),
-                    const Align(widthFactor: 0.7, child: WalletToken(gem: GemPalette.yellow)),
-                    const Align(widthFactor: 0.7, child: WalletToken(gem: GemPalette.red)),
-                    const Align(widthFactor: 0.7, child: WalletToken(gem: GemPalette.red)),
-                    const Align(widthFactor: 0.7, child: WalletToken(gem: GemPalette.wild)),
-                    const Align(widthFactor: 0.7, child: WalletToken(gem: GemPalette.wild)),
+                    ..._buildWalletTokens(player),
                     const Spacer(),
                     Container(width: 28, height: 28, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.blueGrey[300]!))),
                     const SizedBox(width: 4),
@@ -290,25 +441,44 @@ class GemCrafterScreen extends StatelessWidget {
       ),
     );
   }
+
+  List<Widget> _buildWalletTokens(PlayerState player) {
+    List<Widget> tokens = [];
+    bool first = true;
+    for (var gem in GemType.values) {
+      for (int i = 0; i < (player.wallet[gem] ?? 0); i++) {
+        if (first) {
+          tokens.add(WalletToken(gem: gem));
+          first = false;
+        } else {
+          tokens.add(Align(widthFactor: 0.7, child: WalletToken(gem: gem)));
+        }
+      }
+    }
+    return tokens;
+  }
 }
 
 // --- WIDGET COMPONENTS ---
 
 Widget _buildGemIcon(GemType gem, double size, {Color? color}) {
-  if (gem.textIcon != null) {
-    return Text(gem.textIcon!, style: TextStyle(fontSize: size, fontWeight: FontWeight.w900, color: color ?? Colors.white, height: 1.0));
-  }
-  return Icon(gem.icon, size: size, color: color ?? Colors.white);
+  return Text(
+    gem.textIcon, 
+    style: TextStyle(
+      fontSize: size, 
+      fontWeight: FontWeight.w900, 
+      color: color ?? Colors.white, 
+      height: 1.1,
+      leadingDistribution: TextLeadingDistribution.even
+    ),
+    textAlign: TextAlign.center,
+  );
 }
 
 class OpponentCard extends StatelessWidget {
-  final String name;
-  final String avatar;
-  final int score;
-  final List<int> engine;
-  final List<int> wallet;
+  final PlayerState player;
 
-  const OpponentCard({super.key, required this.name, required this.avatar, required this.score, required this.engine, required this.wallet});
+  const OpponentCard({super.key, required this.player});
 
   @override
   Widget build(BuildContext context) {
@@ -323,23 +493,23 @@ class OpponentCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  CircleAvatar(radius: 8, backgroundColor: const Color(0xFF2A9D8F), child: Text(avatar, style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
+                  CircleAvatar(radius: 8, backgroundColor: const Color(0xFF2A9D8F), child: Text(player.avatar, style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
                   const SizedBox(width: 4),
-                  Text(name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+                  Text(player.name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
                 ],
               ),
-              Text(score.toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF2A9D8F))),
+              Text(player.score.toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF2A9D8F))),
             ],
           ),
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              ...List.generate(5, (i) {
-                int c = engine[i];
+              ...[GemType.emerald, GemType.amethyst, GemType.yellow, GemType.ruby, GemType.sapphire].map((g) {
+                int c = player.engine[g] ?? 0;
                 return Container(
                   width: 12, height: 12,
-                  decoration: BoxDecoration(color: GemPalette.stdGems[i].color.withOpacity(c > 0 ? 1.0 : 0.2), borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(color: g.color.withOpacity(c > 0 ? 1.0 : 0.2), borderRadius: BorderRadius.circular(2)),
                   child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 7, color: Colors.white, fontWeight: FontWeight.bold))),
                 );
               }),
@@ -349,9 +519,8 @@ class OpponentCard extends StatelessWidget {
           const SizedBox(height: 2),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(6, (i) {
-              int c = wallet[i];
-              GemType g = i < 5 ? GemPalette.stdGems[i] : GemPalette.wild;
+            children: GemType.values.map((g) {
+              int c = player.wallet[g] ?? 0;
               return Container(
                 width: 12, height: 12,
                 decoration: BoxDecoration(
@@ -361,7 +530,7 @@ class OpponentCard extends StatelessWidget {
                 ),
                 child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 6, color: Colors.white, fontWeight: FontWeight.bold))),
               );
-            }),
+            }).toList(),
           ),
         ],
       ),
@@ -371,27 +540,32 @@ class OpponentCard extends StatelessWidget {
 
 class NobleTile extends StatelessWidget {
   final int points;
-  final List<Cost> req;
+  final Map<GemType, int> req;
   const NobleTile({super.key, required this.points, required this.req});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 48, height: 48,
-      decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFFD4AF37), width: 2), boxShadow: const [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDFBF7),
+        borderRadius: BorderRadius.circular(6), 
+        border: Border.all(color: const Color(0xFFD4AF37), width: 2), 
+        boxShadow: const [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]
+      ),
       padding: const EdgeInsets.all(4),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(points.toString(), style: TextStyle(color: Colors.yellow[400], fontWeight: FontWeight.w900, fontSize: 16, height: 1)),
+          Text(points.toString(), style: const TextStyle(color: Color(0xFFB8860B), fontWeight: FontWeight.w900, fontSize: 16, height: 1)),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: req.map((r) => Padding(
+            children: req.entries.map((entry) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 1),
               child: Column(
                 children: [
-                  Text(r.count.toString(), style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold, height: 1)),
-                  Container(width: 6, height: 6, margin: const EdgeInsets.only(top: 1), decoration: BoxDecoration(color: r.gem.color, borderRadius: BorderRadius.circular(1))),
+                  Text(entry.value.toString(), style: const TextStyle(color: Color(0xFF2B2D42), fontSize: 8, fontWeight: FontWeight.w900, height: 1)),
+                  Container(width: 6, height: 6, margin: const EdgeInsets.only(top: 1), decoration: BoxDecoration(color: entry.key.color, borderRadius: BorderRadius.circular(1))),
                 ],
               ),
             )).toList(),
@@ -423,38 +597,50 @@ class DeckCard extends StatelessWidget {
   }
 }
 
-class MarketCard extends StatelessWidget {
-  final GemType gem;
-  final int points;
-  final List<Cost> costs;
-  const MarketCard({super.key, required this.gem, required this.points, required this.costs});
+class MarketCardWidget extends StatelessWidget {
+  final MarketCard card;
+  final bool affordable;
+  final VoidCallback onTap;
+
+  const MarketCardWidget({super.key, required this.card, required this.affordable, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.blueGrey[200]!), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 2)]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
+    return GestureDetector(
+      onTap: affordable ? onTap : null,
+      child: AnimatedOpacity(
+        opacity: affordable ? 1.0 : 0.5,
+        duration: const Duration(milliseconds: 200),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: affordable ? Colors.blueGrey[300]! : Colors.blueGrey[100]!), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 2)]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(points > 0 ? points.toString() : "", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[700], height: 1)),
-              _buildGemIcon(gem, 14, color: gem.color),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(card.points > 0 ? card.points.toString() : "", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[700], height: 1)),
+                  Container(
+                    width: 14, height: 14,
+                    decoration: BoxDecoration(color: card.provides.color, shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 1)]),
+                    child: Center(child: _buildGemIcon(card.provides, 9, color: Colors.white)),
+                  )
+                ],
+              ),
+              Wrap(
+                spacing: 2, runSpacing: 2,
+                children: card.costs.entries.map((entry) => Container(
+                  width: 12, height: 12,
+                  decoration: BoxDecoration(color: entry.key.color, shape: BoxShape.circle),
+                  child: Center(child: Text(entry.value.toString(), style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w900))),
+                )).toList(),
+              )
             ],
           ),
-          Wrap(
-            spacing: 2, runSpacing: 2,
-            children: costs.map((c) => Container(
-              width: 12, height: 12,
-              decoration: BoxDecoration(color: c.gem.color, shape: BoxShape.circle),
-              child: Center(child: Text(c.count.toString(), style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w900))),
-            )).toList(),
-          )
-        ],
+        ),
       ),
     );
   }
@@ -475,7 +661,7 @@ class BankToken extends StatelessWidget {
           Container(
             width: 40, height: 40,
             decoration: BoxDecoration(color: gem.gradient == null ? gem.color : null, gradient: gem.gradient, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2), boxShadow: const [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]),
-            child: Center(child: _buildGemIcon(gem, 18)),
+            child: Center(child: _buildGemIcon(gem, 18, color: Colors.white)),
           ),
           const SizedBox(height: 6),
           Container(
@@ -508,7 +694,7 @@ class EngineBlock extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(count.toString(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: active ? Colors.white : Colors.blueGrey[300], height: 1)),
-          if (active) Padding(padding: const EdgeInsets.only(top: 2), child: _buildGemIcon(gem, 8)),
+          if (active) Padding(padding: const EdgeInsets.only(top: 2), child: _buildGemIcon(gem, 10, color: Colors.white)),
         ],
       ),
     );
@@ -524,7 +710,7 @@ class WalletToken extends StatelessWidget {
     return Container(
       width: 28, height: 28,
       decoration: BoxDecoration(color: gem.gradient == null ? gem.color : null, gradient: gem.gradient, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 2)]),
-      child: Center(child: _buildGemIcon(gem, 10)),
+      child: Center(child: _buildGemIcon(gem, 12, color: Colors.white)),
     );
   }
 }
