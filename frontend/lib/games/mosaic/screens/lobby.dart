@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // REQUIRED FOR CLIPBOARD
 import 'dart:async';
-import '../main.dart';
+import '../../../main.dart';
+import '../../../core/ui/physics_button.dart';
 import 'game.dart';
 
 class LobbyScreen extends StatefulWidget {

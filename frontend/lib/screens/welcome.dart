@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
-import 'lobby.dart';
-import 'local_play.dart';
+import '../core/ui/physics_button.dart';
+import '../games/mosaic/screens/lobby.dart';
+import '../games/mosaic/screens/local_play.dart';
+import '../games/mosaic/screens/sandbox.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -74,7 +76,7 @@ class WelcomeScreen extends StatelessWidget {
               ),
               
               const Spacer(),
-              const Text("v16.3 • Offline Mode Activated", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
+              const Text("v16.7 • Domain Driven Design", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
             ],
           ),
         ),

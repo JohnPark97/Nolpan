@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:math' as math;
-import '../main.dart';
+import '../../../main.dart';
+import '../../../core/ui/physics_button.dart';
 import 'lobby.dart';
 
 const List<List<String>> wallPattern = [
