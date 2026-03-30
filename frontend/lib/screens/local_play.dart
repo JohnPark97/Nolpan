@@ -20,9 +20,10 @@ class LocalPlayScreen extends StatefulWidget {
 class _LocalPlayScreenState extends State<LocalPlayScreen> {
   // LOBBY STATE
   bool _inLobby = true;
-  List<String> _localPlayers = ["Player 1"];
+  List<String> _localPlayers = []; // SPRINT 16.4: Zero Default Players
   bool _isAddingPlayer = false;
   final TextEditingController _nameCtrl = TextEditingController();
+  final FocusNode _nameFocusNode = FocusNode(); // SPRINT 16.4: Auto-Focus Keyboard
 
   final List<Color> _avatarColors = [tTeal, tTerra, tGold, tInk];
 
@@ -48,6 +49,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _nameFocusNode.dispose();
     super.dispose();
   }
 
@@ -105,6 +107,27 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     }
   }
 
+  // SPRINT 16.4: Added 1:1 Illegal Move Parity Check
+  String? _getPlacementError(int rowIdx, String color, String player) {
+    if (rowIdx == -1) return null;
+    Map<String, dynamic> myBoard = _gameState['boards'][player] ?? {};
+    List wall = myBoard['wall'] ?? [];
+    List patternLines = myBoard['pattern_lines'] ?? [];
+
+    for (int col = 0; col < 5; col++) {
+      if (wall.length > rowIdx && wall[rowIdx].length > col && (wall[rowIdx][col] == color || (color == 'purple' && wall[rowIdx][col] == 'amethyst'))) {
+        return "You've already built this color in that row!";
+      }
+    }
+    if (patternLines.length > rowIdx) {
+      for (var t in patternLines[rowIdx]) {
+        if (t != "" && t != color && !(color == 'purple' && t == 'amethyst')) return "Row holds another color.";
+      }
+      if ((patternLines[rowIdx] as List).where((s) => s == "").isEmpty) return "Row is full!";
+    }
+    return null;
+  }
+
   void _commitTurn(int targetRow) async {
     if (heldColor == null || heldKilnIdx == null) return;
     HapticFeedback.mediumImpact();
@@ -154,7 +177,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
           newCenter.add(t);
         }
       }
-      // UPDATE STATE BEFORE EVALUATING ROUND OVER
       _gameState['center'] = newCenter;
     }
 
@@ -188,7 +210,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
       }
     }
 
-    // SPRINT 16.4 BUGFIX: Clean array evaluation prevents stale-pointer freezing
     bool isMarketEmpty = true;
     for (var f in _gameState['factories']) {
       if ((f as List).isNotEmpty) { isMarketEmpty = false; break; }
@@ -230,7 +251,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     for (String p in _localPlayers) {
       var board = _gameState['boards'][p];
       
-      // 1. Positive Points
+      // Positive Points
       for (int r = 0; r < 5; r++) {
         if (board['pattern_lines'][r].where((s) => s == "").isEmpty && board['pattern_lines'][r].isNotEmpty) {
           String color = board['pattern_lines'][r][0];
@@ -260,7 +281,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
         }
       }
 
-      // 2. Penalties & -1 Token Setup
+      // Penalties & -1 Token Setup
       List<int> pens = [-1, -1, -2, -2, -2, -3, -3];
       for (int i = 0; i < board['floor_line'].length; i++) {
         String t = board['floor_line'][i];
@@ -276,12 +297,11 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
         }
       }
 
-      // 3. Clamp
+      // Clamp
       if (board['score'] < 0) board['score'] = 0;
       board['floor_line'] = [];
     }
 
-    // SPRINT 16.4: E2E Game Over Detection
     bool isGameOver = false;
     for (String p in _localPlayers) {
       var board = _gameState['boards'][p];
@@ -299,7 +319,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
       for (String p in _localPlayers) {
         var b = _gameState['boards'][p];
         
-        // +2 Row Bonus
         for (int r = 0; r < 5; r++) {
           bool rowComplete = true;
           for (int c = 0; c < 5; c++) {
@@ -308,7 +327,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
           if (rowComplete) b['score'] += 2;
         }
         
-        // +7 Column Bonus
         for (int c = 0; c < 5; c++) {
           bool colComplete = true;
           for (int r = 0; r < 5; r++) {
@@ -317,7 +335,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
           if (colComplete) b['score'] += 7;
         }
         
-        // +10 Color Bonus
         for (String color in ['blue', 'yellow', 'red', 'black', 'amethyst']) {
           int count = 0;
           for (int r = 0; r < 5; r++) {
@@ -529,10 +546,25 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          CircleAvatar(
-                            radius: 20, 
-                            backgroundColor: _avatarColors[i % 4], 
-                            child: Text(_localPlayers[i][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              CircleAvatar(
+                                radius: 20, 
+                                backgroundColor: _avatarColors[i % 4], 
+                                child: Text(_localPlayers[i][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                              ),
+                              Positioned(
+                                right: -4, top: -4,
+                                child: GestureDetector(
+                                  onTap: () => setState(() => _localPlayers.removeAt(i)),
+                                  child: Container(
+                                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                    child: const Icon(Icons.remove_circle, color: tTerra, size: 16)
+                                  )
+                                )
+                              )
+                            ],
                           ),
                           const SizedBox(height: 4),
                           Text(_localPlayers[i], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tInk))
@@ -550,6 +582,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                               width: 100, height: 40,
                               child: TextField(
                                 controller: _nameCtrl,
+                                focusNode: _nameFocusNode,
                                 autofocus: true,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -582,7 +615,12 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             GestureDetector(
-                              onTap: () => setState(() => _isAddingPlayer = true),
+                              onTap: () {
+                                setState(() => _isAddingPlayer = true);
+                                Future.delayed(const Duration(milliseconds: 50), () {
+                                  if (mounted) _nameFocusNode.requestFocus();
+                                });
+                              },
                               child: Container(
                                 width: 40, height: 40, 
                                 decoration: const BoxDecoration(
@@ -635,7 +673,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     );
   }
 
-  // SPRINT 16.4: Victory Screen Modal
   Widget _buildGameOverScreen() {
     List<String> ranked = List.from(_localPlayers);
     ranked.sort((a, b) => (_gameState['boards'][b]['score'] as int).compareTo(_gameState['boards'][a]['score'] as int));
@@ -681,7 +718,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
             const SizedBox(height: 16),
             PhysicsButton(text: "PLAY AGAIN", color: tTeal, shadowColor: const Color(0xFF1E7066), onTap: _startLocalGame),
             const SizedBox(height: 16),
-            PhysicsButton(text: "EXIT TO LOBBY", color: tTerra, shadowColor: const Color(0xFFB3563F), onTap: () => setState(() { _inLobby = true; _isReviewingBoard = false; })),
+            PhysicsButton(text: "EXIT TO LOBBY", color: tTerra, shadowColor: const Color(0xFFB3563F), onTap: () => setState(() { _inLobby = true; _isReviewingBoard = false; _localPlayers.clear(); })),
           ]
         )
       )
@@ -737,19 +774,14 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                       if (_gameState['status'] == "GAME_OVER")
                         const Text("REVIEWING BOARDS", style: TextStyle(color: tInk, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 2))
                       else
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300), 
-                          switchInCurve: Curves.easeOutBack,
-                          transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-                          child: Text(
-                            "CURRENT TURN: ${_turnPlayer.toUpperCase()}", 
-                            key: ValueKey(_turnPlayer),
-                            style: TextStyle(
-                              color: _avatarColors[_localPlayers.indexOf(_turnPlayer) % 4], 
-                              fontWeight: FontWeight.w900, 
-                              fontSize: 12, 
-                              letterSpacing: 2
-                            )
+                        // SPRINT 16.4: Removed Transition Animation
+                        Text(
+                          "CURRENT TURN: ${_turnPlayer.toUpperCase()}", 
+                          style: TextStyle(
+                            color: _avatarColors[_localPlayers.indexOf(_turnPlayer) % 4], 
+                            fontWeight: FontWeight.w900, 
+                            fontSize: 12, 
+                            letterSpacing: 2
                           )
                         ),
                       if (_gameState['status'] == "GAME_OVER")
@@ -894,7 +926,10 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: List.generate(_gameState['factories'].length, (kIdx) {
-                            List<String> fTiles = _gameState['factories'][kIdx];
+                            // SPRINT 16.4: Sort Factory Tiles by Color
+                            List<String> fTiles = List<String>.from(_gameState['factories'][kIdx]);
+                            fTiles.sort();
+                            
                             return Opacity(
                               opacity: fTiles.isEmpty || !canPick ? 0.2 : 1.0,
                               child: Container(
@@ -943,30 +978,40 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                         child: Center(
                           child: (_gameState['center'] as List).isEmpty 
                               ? const Text("CENTER POOL", style: TextStyle(fontSize: 10, color: Colors.grey)) 
-                              : Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  child: Wrap(
-                                    spacing: 4, runSpacing: 4, 
-                                    children: (_gameState['center'] as List<String>).map((c) {
-                                      bool isHeldLocally = heldColor == c && heldKilnIdx == -1;
-                                      return GestureDetector(
-                                        onTap: (c == "first_player" || !canPick) ? null : () { 
-                                          setState(() { 
-                                            heldColor = c; 
-                                            heldKilnIdx = -1; 
-                                            heldCount = (_gameState['center'] as List).where((t) => t == c).length; 
-                                          }); 
-                                          HapticFeedback.selectionClick();
-                                        },
-                                        child: AnimatedContainer(
-                                          duration: const Duration(milliseconds: 150), curve: Curves.easeOutBack,
-                                          transform: isHeldLocally ? Matrix4.translationValues(0, -4.0, 0) : Matrix4.identity(),
-                                          child: _buildTile(c, size: 22, scale: isHeldLocally ? 1.1 : 1.0)
-                                        )
-                                      );
-                                    }).toList()
-                                  ),
-                                )
+                              : Builder(builder: (context) {
+                                  // SPRINT 16.4: Sort Center Pool by Color
+                                  List<String> sortedCenter = List<String>.from(_gameState['center']);
+                                  sortedCenter.sort((a, b) {
+                                    if (a == "first_player") return -1;
+                                    if (b == "first_player") return 1;
+                                    return a.compareTo(b);
+                                  });
+                                  
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    child: Wrap(
+                                      spacing: 4, runSpacing: 4, 
+                                      children: sortedCenter.map((c) {
+                                        bool isHeldLocally = heldColor == c && heldKilnIdx == -1;
+                                        return GestureDetector(
+                                          onTap: (c == "first_player" || !canPick) ? null : () { 
+                                            setState(() { 
+                                              heldColor = c; 
+                                              heldKilnIdx = -1; 
+                                              heldCount = sortedCenter.where((t) => t == c).length; 
+                                            }); 
+                                            HapticFeedback.selectionClick();
+                                          },
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 150), curve: Curves.easeOutBack,
+                                            transform: isHeldLocally ? Matrix4.translationValues(0, -4.0, 0) : Matrix4.identity(),
+                                            child: _buildTile(c, size: 22, scale: isHeldLocally ? 1.1 : 1.0)
+                                          )
+                                        );
+                                      }).toList()
+                                    ),
+                                  );
+                                })
                         ),
                       )
                     ],
@@ -996,9 +1041,21 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: List.generate(5, (rIdx) {
-                                    bool isLegal = heldColor != null && canPick; 
+                                    // SPRINT 16.4: Strict Edge Case Blocking
+                                    String? errorMsg = heldColor != null ? _getPlacementError(rIdx, heldColor!, _turnPlayer) : null;
+                                    bool isLegal = heldColor != null && canPick && errorMsg == null;
+                                    
                                     return GestureDetector(
-                                      onTap: heldColor != null && canPick ? () => _commitTurn(rIdx) : null,
+                                      onTap: heldColor != null && canPick ? () {
+                                        if (isLegal) {
+                                          _commitTurn(rIdx);
+                                        } else {
+                                          HapticFeedback.vibrate();
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(errorMsg!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: tTerra, duration: const Duration(seconds: 2))
+                                          );
+                                        }
+                                      } : null,
                                       onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
                                       child: Container(
                                         key: patternRowKeys[rIdx], margin: const EdgeInsets.symmetric(vertical: 2), color: Colors.transparent,
@@ -1015,9 +1072,13 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                                             }
 
                                             Widget tileW;
-                                            if (slotIdx < ghostStart) tileW = _buildTile("", size: 24, empty: true);
-                                            else if (slotIdx >= ghostStart && slotIdx < emptyCount) tileW = _buildTile(heldColor!, size: 24, isGhost: true);
-                                            else tileW = _buildTile(rowColor, size: 24);
+                                            if (slotIdx < ghostStart) {
+                                              tileW = _buildTile("", size: 24, empty: true);
+                                            } else if (slotIdx >= ghostStart && slotIdx < emptyCount) {
+                                              tileW = _buildTile(heldColor!, size: 24, isGhost: true);
+                                            } else {
+                                              tileW = _buildTile(rowColor, size: 24);
+                                            }
 
                                             if (_showShatter) {
                                               tileW = AnimatedScale(
