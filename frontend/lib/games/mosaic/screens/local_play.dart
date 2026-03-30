@@ -19,7 +19,6 @@ class LocalPlayScreen extends StatefulWidget {
 }
 
 class _LocalPlayScreenState extends State<LocalPlayScreen> {
-  // LOBBY STATE
   bool _inLobby = true;
   List<String> _localPlayers = [];
   bool _isAddingPlayer = false;
@@ -28,12 +27,10 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
 
   final List<Color> _avatarColors = [tTeal, tTerra, tGold, tInk];
 
-  // GAME ENGINE STATE
   Map<String, dynamic> _gameState = {};
   String _turnPlayer = "";
   bool _isReviewingBoard = false;
   
-  // PHYSICS STATE
   String? heldColor;
   int? heldKilnIdx;
   int? heldCount;
@@ -50,7 +47,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
   @override
   void initState() {
     super.initState();
-    // SPRINT 16.6: Invisible Overlay Focus Listener
     _nameFocusNode.addListener(() {
       if (_nameFocusNode.hasFocus && !_isAddingPlayer) {
         setState(() => _isAddingPlayer = true);
@@ -163,27 +159,14 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     int cCount = heldCount!;
     String player = _turnPlayer;
 
-    GlobalKey sourceKey = kIdx == -1 ? centerKey : factoryKeys[kIdx];
-    GlobalKey destKey = targetRow == -1 ? floorKey : patternRowKeys[targetRow];
-    _playDraftingFlight(sourceKey, destKey, cColor, cCount);
-
-    setState(() { 
-      heldColor = null; 
-      heldKilnIdx = null; 
-      heldCount = null; 
-      hoveredRow = null; 
-    });
-
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-
     List<List<String>> factories = _gameState['factories'];
     List<String> center = _gameState['center'];
     Map<String, dynamic> b = _gameState['boards'][player];
 
     int picked = 0;
+
+    // V51 FIX: Instantly extract the tiles from the source arrays
     if (kIdx >= 0) {
-      List<String> remaining = [];
       for (String t in factories[kIdx]) {
         if (t == cColor) picked++; else center.add(t);
       }
@@ -206,6 +189,24 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
       _gameState['center'] = newCenter;
     }
 
+    // Play the physical flight path
+    GlobalKey sourceKey = kIdx == -1 ? centerKey : factoryKeys[kIdx];
+    GlobalKey destKey = targetRow == -1 ? floorKey : patternRowKeys[targetRow];
+    _playDraftingFlight(sourceKey, destKey, cColor, picked);
+
+    // V51 FIX: Instantly update UI so the source tiles vanish before flight lands
+    setState(() { 
+      heldColor = null; 
+      heldKilnIdx = null; 
+      heldCount = null; 
+      hoveredRow = null; 
+    });
+
+    // Wait for the animation to land
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+
+    // NOW assign them to the board
     if (targetRow >= 0) {
       List<String> rTiles = b['pattern_lines'][targetRow];
       int emptySlots = rTiles.where((s) => s == "").length;
@@ -386,8 +387,9 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     final RenderBox? endBox = wallKeys[r][c].currentContext?.findRenderObject() as RenderBox?;
     if (startBox == null || endBox == null) return;
 
-    final Offset startPos = startBox.localToGlobal(Offset.zero);
-    final Offset endPos = endBox.localToGlobal(Offset.zero);
+    // V51 FIX: Exact center snapping for Scoring
+    final Offset startCenter = startBox.localToGlobal(Offset(startBox.size.width / 2, startBox.size.height / 2));
+    final Offset endCenter = endBox.localToGlobal(Offset(endBox.size.width / 2, endBox.size.height / 2));
 
     OverlayEntry? entry;
     entry = OverlayEntry(
@@ -396,9 +398,12 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
         duration: const Duration(milliseconds: 600),
         curve: Curves.easeOutBack,
         builder: (BuildContext tweenCtx, double val, Widget? child) {
+          // -12px offset centers the 24px tile exactly
+          double dx = startCenter.dx + (endCenter.dx - startCenter.dx) * val - 12.0;
+          double dy = startCenter.dy + (endCenter.dy - startCenter.dy) * val - 12.0;
           return Positioned(
-            left: startPos.dx + (endPos.dx - startPos.dx) * val, 
-            top: startPos.dy + (endPos.dy - startPos.dy) * val, 
+            left: dx, 
+            top: dy, 
             child: _buildTile(color, size: 24)
           );
         },
@@ -413,8 +418,11 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     final RenderBox? endBox = endKey.currentContext?.findRenderObject() as RenderBox?;
     if (startBox == null || endBox == null) return;
 
-    final Offset startPos = startBox.localToGlobal(Offset.zero);
-    final Offset endPos = endBox.localToGlobal(Offset.zero);
+    // V51 FIX: True center-point math to prevent "Left Screen Spawning"
+    final Offset startCenter = startBox.localToGlobal(Offset(startBox.size.width / 2, startBox.size.height / 2));
+    final Offset endCenter = endBox.localToGlobal(Offset(endBox.size.width / 2, endBox.size.height / 2));
+
+    double overlayWidth = count * 27.0; // 24px + 3px margins per tile
 
     OverlayEntry? entry;
     entry = OverlayEntry(
@@ -423,8 +431,9 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOutSine,
         builder: (BuildContext tweenCtx, double val, Widget? child) {
-          double dx = startPos.dx + (endPos.dx - startPos.dx) * val;
-          double dy = startPos.dy + (endPos.dy - startPos.dy) * val - (math.sin(val * math.pi) * 60);
+          // - (overlayWidth / 2) centers the flying array exactly over the start/end points
+          double dx = startCenter.dx + (endCenter.dx - startCenter.dx) * val - (overlayWidth / 2);
+          double dy = startCenter.dy + (endCenter.dy - startCenter.dy) * val - 13.5 - (math.sin(val * math.pi) * 60);
           return Positioned(
             left: dx, top: dy,
             child: Transform.scale(
@@ -541,8 +550,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
 
   Widget _buildLobby() {
     bool canStart = _localPlayers.length >= 2;
-
-    // SPRINT 16.6: Top-Level Unfocus Detector to enable clicking away to save
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       behavior: HitTestBehavior.opaque,
@@ -600,7 +607,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                         ),
                       );
                     } else if (i == _localPlayers.length && _localPlayers.length < 4) {
-                      // SPRINT 16.6: Invisible Overlay Input Trick
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 6),
                         child: Column(
