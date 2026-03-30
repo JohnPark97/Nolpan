@@ -86,7 +86,7 @@ class _GameScreenState extends State<GameScreen> {
 
     socketService.send('PICK_TILES', {
       'code': widget.roomCode,
-      'player': socketService.playerName,
+      'player': socketService.playerName ?? "",
       'kiln_idx': kIdx,
       'color': cColor,
       'target_row': targetRow
@@ -244,7 +244,8 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Widget _buildGameOverScreen() {
-    List<String> ranked = (_gameState['boards'] as Map).keys.toList();
+    // V67 BUGFIX: Correctly cast the dynamic map keys to a List of Strings
+    List<String> ranked = List<String>.from((_gameState['boards'] as Map).keys);
     ranked.sort((a, b) => (_gameState['boards'][b]['score'] as int).compareTo(_gameState['boards'][a]['score'] as int));
     
     return Center(
@@ -301,11 +302,14 @@ class _GameScreenState extends State<GameScreen> {
       return Scaffold(backgroundColor: tBg, body: SafeArea(child: _buildGameOverScreen()));
     }
 
-    String myName = socketService.playerName;
+    // V67 BUGFIX: Add coalesce fallback to prevent nullable String crash
+    String myName = socketService.playerName ?? "";
     String turnPlayer = _gameState['turn_player'] ?? "";
     bool canPick = turnPlayer == myName && _gameState['status'] != "GAME_OVER";
 
-    List<String> opponents = (_gameState['boards'] as Map).keys.where((p) => p != myName).toList().cast<String>();
+    // V67 BUGFIX: Correctly map and convert keys to Strings before casting to list
+    List<String> opponents = (_gameState['boards'] as Map).keys.where((p) => p != myName).map((e) => e.toString()).toList();
+    
     Map<String, dynamic> myBoard = _gameState['boards'][myName] ?? {};
     List patternLines = myBoard['pattern_lines'] ?? [];
     List wall = myBoard['wall'] ?? [];
