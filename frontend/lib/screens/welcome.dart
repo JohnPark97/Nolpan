@@ -3,24 +3,20 @@ import '../main.dart';
 import '../core/ui/physics_button.dart';
 import '../games/mosaic/screens/lobby.dart';
 import '../games/mosaic/screens/local_play.dart';
-import '../games/merchant/screens/local_play.dart' as merchant;
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
-  Widget _buildLogoTile(Color color, IconData icon, double yOffset) {
-    return Transform.translate(
-      offset: Offset(0, yOffset),
-      child: Container(
-        width: 56, height: 56,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [BoxShadow(color: Colors.black26, offset: Offset(0, 6), blurRadius: 8)],
-          border: const Border(bottom: BorderSide(color: Colors.black12, width: 4))
-        ),
-        child: Center(child: Icon(icon, color: Colors.white.withOpacity(0.8), size: 32)),
+  Widget _buildLogoTile(Color color, IconData icon) {
+    return Container(
+      width: 56, height: 56,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 4), blurRadius: 6)],
+        border: const Border(bottom: BorderSide(color: Colors.black12, width: 4))
       ),
+      child: Center(child: Icon(icon, color: Colors.white, size: 32)),
     );
   }
 
@@ -37,14 +33,13 @@ class WelcomeScreen extends StatelessWidget {
             children: [
               const Spacer(),
               
+              // SPRINT 18.3: Platform Branding (Dual-Tile Arcade Logo)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildLogoTile(tTeal, Icons.star, -4.0),
+                  _buildLogoTile(tTeal, Icons.star),
                   const SizedBox(width: 12),
-                  _buildLogoTile(const Color(0xFF8E44AD), Icons.diamond, 4.0),
-                  const SizedBox(width: 12),
-                  _buildLogoTile(tGold, Icons.circle, -2.0),
+                  _buildLogoTile(const Color(0xFF8E44AD), Icons.diamond),
                 ],
               ),
               const SizedBox(height: 36),
@@ -61,29 +56,23 @@ class WelcomeScreen extends StatelessWidget {
               
               const Spacer(),
 
+              // SPRINT 18.3: Strict 2-Button Flow (No Dev Tools)
               PhysicsButton(
-                text: "MOSAIC DRAFT (ONLINE)",
+                text: "PLAY ONLINE",
                 color: tTeal,
                 shadowColor: const Color(0xFF1E7066),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LobbyScreen())),
               ),
               const SizedBox(height: 16),
               PhysicsButton(
-                text: "MOSAIC DRAFT (LOCAL)",
+                text: "OFFLINE MODE",
                 color: tGold,
                 shadowColor: const Color(0xFFB59A53),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LocalPlayScreen())),
               ),
-              const SizedBox(height: 16),
-              PhysicsButton(
-                text: "GEM CRAFTER (PROTOTYPE)",
-                color: const Color(0xFF8E44AD),
-                shadowColor: const Color(0xFF5E2B73),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const merchant.GemCrafterScreen())),
-              ),
               
               const Spacer(),
-              const Text("v17.0 • Domain Engine Live", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
+              const Text("v18.3 • Platform Engine Live", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
             ],
           ),
         ),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import '../../../main.dart';
 import '../../../core/ui/physics_button.dart';
+import '../../merchant/screens/local_play.dart' as merchant;
 
 const List<List<String>> wallPattern = [
   ['blue', 'yellow', 'red', 'black', 'amethyst'],
@@ -19,6 +20,7 @@ class LocalPlayScreen extends StatefulWidget {
 }
 
 class _LocalPlayScreenState extends State<LocalPlayScreen> {
+  // LOBBY STATE
   bool _inLobby = true;
   List<String> _localPlayers = [];
   bool _isAddingPlayer = false;
@@ -27,10 +29,13 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
 
   final List<Color> _avatarColors = [tTeal, tTerra, tGold, tInk];
 
+  // GAME ENGINE STATE
   Map<String, dynamic> _gameState = {};
   String _turnPlayer = "";
   bool _isReviewingBoard = false;
+  String _selectedGame = "mosaic"; // SPRINT 18.3: Platform Game Selector
   
+  // PHYSICS STATE
   String? heldColor;
   int? heldKilnIdx;
   int? heldCount;
@@ -159,14 +164,27 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     int cCount = heldCount!;
     String player = _turnPlayer;
 
+    GlobalKey sourceKey = kIdx == -1 ? centerKey : factoryKeys[kIdx];
+    GlobalKey destKey = targetRow == -1 ? floorKey : patternRowKeys[targetRow];
+    _playDraftingFlight(sourceKey, destKey, cColor, cCount);
+
+    setState(() { 
+      heldColor = null; 
+      heldKilnIdx = null; 
+      heldCount = null; 
+      hoveredRow = null; 
+    });
+
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+
     List<List<String>> factories = _gameState['factories'];
     List<String> center = _gameState['center'];
     Map<String, dynamic> b = _gameState['boards'][player];
 
     int picked = 0;
-
-    // V51 FIX: Instantly extract the tiles from the source arrays
     if (kIdx >= 0) {
+      List<String> remaining = [];
       for (String t in factories[kIdx]) {
         if (t == cColor) picked++; else center.add(t);
       }
@@ -189,24 +207,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
       _gameState['center'] = newCenter;
     }
 
-    // Play the physical flight path
-    GlobalKey sourceKey = kIdx == -1 ? centerKey : factoryKeys[kIdx];
-    GlobalKey destKey = targetRow == -1 ? floorKey : patternRowKeys[targetRow];
-    _playDraftingFlight(sourceKey, destKey, cColor, picked);
-
-    // V51 FIX: Instantly update UI so the source tiles vanish before flight lands
-    setState(() { 
-      heldColor = null; 
-      heldKilnIdx = null; 
-      heldCount = null; 
-      hoveredRow = null; 
-    });
-
-    // Wait for the animation to land
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-
-    // NOW assign them to the board
     if (targetRow >= 0) {
       List<String> rTiles = b['pattern_lines'][targetRow];
       int emptySlots = rTiles.where((s) => s == "").length;
@@ -387,7 +387,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     final RenderBox? endBox = wallKeys[r][c].currentContext?.findRenderObject() as RenderBox?;
     if (startBox == null || endBox == null) return;
 
-    // V51 FIX: Exact center snapping for Scoring
     final Offset startCenter = startBox.localToGlobal(Offset(startBox.size.width / 2, startBox.size.height / 2));
     final Offset endCenter = endBox.localToGlobal(Offset(endBox.size.width / 2, endBox.size.height / 2));
 
@@ -398,12 +397,10 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
         duration: const Duration(milliseconds: 600),
         curve: Curves.easeOutBack,
         builder: (BuildContext tweenCtx, double val, Widget? child) {
-          // -12px offset centers the 24px tile exactly
           double dx = startCenter.dx + (endCenter.dx - startCenter.dx) * val - 12.0;
           double dy = startCenter.dy + (endCenter.dy - startCenter.dy) * val - 12.0;
           return Positioned(
-            left: dx, 
-            top: dy, 
+            left: dx, top: dy, 
             child: _buildTile(color, size: 24)
           );
         },
@@ -418,11 +415,9 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     final RenderBox? endBox = endKey.currentContext?.findRenderObject() as RenderBox?;
     if (startBox == null || endBox == null) return;
 
-    // V51 FIX: True center-point math to prevent "Left Screen Spawning"
     final Offset startCenter = startBox.localToGlobal(Offset(startBox.size.width / 2, startBox.size.height / 2));
     final Offset endCenter = endBox.localToGlobal(Offset(endBox.size.width / 2, endBox.size.height / 2));
-
-    double overlayWidth = count * 27.0; // 24px + 3px margins per tile
+    double overlayWidth = count * 27.0;
 
     OverlayEntry? entry;
     entry = OverlayEntry(
@@ -431,7 +426,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOutSine,
         builder: (BuildContext tweenCtx, double val, Widget? child) {
-          // - (overlayWidth / 2) centers the flying array exactly over the start/end points
           double dx = startCenter.dx + (endCenter.dx - startCenter.dx) * val - (overlayWidth / 2);
           double dy = startCenter.dy + (endCenter.dy - startCenter.dy) * val - 13.5 - (math.sin(val * math.pi) * 60);
           return Positioned(
@@ -548,8 +542,67 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     );
   }
 
+  // SPRINT 18.3: Platform Offline Arcade Lobby
+  Widget _buildMiniatureMosaic() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(width: 8, height: 8, margin: const EdgeInsets.all(2), decoration: const BoxDecoration(color: tTeal, shape: BoxShape.circle)),
+          Container(width: 8, height: 8, margin: const EdgeInsets.all(2), decoration: BoxDecoration(color: Colors.blueGrey[100], shape: BoxShape.circle)),
+          Container(width: 8, height: 8, margin: const EdgeInsets.all(2), decoration: BoxDecoration(color: Colors.blueGrey[100], shape: BoxShape.circle)),
+        ]),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(width: 8, height: 8, margin: const EdgeInsets.all(2), decoration: BoxDecoration(color: Colors.blueGrey[100], shape: BoxShape.circle)),
+          Container(width: 8, height: 8, margin: const EdgeInsets.all(2), decoration: const BoxDecoration(color: tGold, shape: BoxShape.circle)),
+          Container(width: 8, height: 8, margin: const EdgeInsets.all(2), decoration: BoxDecoration(color: Colors.blueGrey[100], shape: BoxShape.circle)),
+        ]),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(width: 8, height: 8, margin: const EdgeInsets.all(2), decoration: BoxDecoration(color: Colors.blueGrey[100], shape: BoxShape.circle)),
+          Container(width: 8, height: 8, margin: const EdgeInsets.all(2), decoration: BoxDecoration(color: Colors.blueGrey[100], shape: BoxShape.circle)),
+          Container(width: 8, height: 8, margin: const EdgeInsets.all(2), decoration: const BoxDecoration(color: tTerra, shape: BoxShape.circle)),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildMiniatureMerchant() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(3, (i) => Container(
+        width: 10, height: 20, 
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        decoration: BoxDecoration(color: Colors.blueGrey[300], borderRadius: BorderRadius.circular(4))
+      )),
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              Navigator.pop(context);
+            },
+            child: const Row(
+              children: [
+                Icon(Icons.arrow_back, color: Colors.blueGrey, size: 16),
+                SizedBox(width: 4),
+                Text("BACK", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey, letterSpacing: 1.5))
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
   Widget _buildLobby() {
     bool canStart = _localPlayers.length >= 2;
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       behavior: HitTestBehavior.opaque,
@@ -565,129 +618,193 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.people, size: 48, color: tTeal),
-              const SizedBox(height: 16),
-              const Text("OFFLINE LOBBY", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: tInk)),
+              const Text("OFFLINE LOBBY", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 2)),
               const SizedBox(height: 32),
-              SizedBox(
-                height: 70,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: List.generate(4, (i) {
-                    if (i < _localPlayers.length) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
+              
+              const Align(alignment: Alignment.centerLeft, child: Text("SELECT EXPERIENCE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 1.5))),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedGame = 'mosaic'),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: _selectedGame == 'mosaic' ? Colors.white : Colors.blueGrey[50]!.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _selectedGame == 'mosaic' ? tTeal : Colors.transparent, width: 2),
+                          boxShadow: _selectedGame == 'mosaic' ? [const BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))] : []
+                        ),
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                CircleAvatar(
-                                  radius: 20, 
-                                  backgroundColor: _avatarColors[i % 4], 
-                                  child: Text(_localPlayers[i][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
-                                ),
-                                Positioned(
-                                  right: -4, top: -4,
-                                  child: GestureDetector(
-                                    onTap: () => setState(() => _localPlayers.removeAt(i)),
-                                    child: Container(
-                                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                                      child: const Icon(Icons.remove_circle, color: tTerra, size: 16)
+                            Text("MOSAIC DRAFT", style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: _selectedGame == 'mosaic' ? tTeal : Colors.blueGrey[300], letterSpacing: 1)),
+                            const SizedBox(height: 12),
+                            _buildMiniatureMosaic(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedGame = 'merchant'),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: _selectedGame == 'merchant' ? Colors.white : Colors.blueGrey[50]!.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _selectedGame == 'merchant' ? const Color(0xFF8E44AD) : Colors.transparent, width: 2),
+                          boxShadow: _selectedGame == 'merchant' ? [const BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))] : []
+                        ),
+                        child: Column(
+                          children: [
+                            Text("GEM CRAFTER", style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: _selectedGame == 'merchant' ? const Color(0xFF8E44AD) : Colors.blueGrey[300], letterSpacing: 1)),
+                            const SizedBox(height: 12),
+                            _buildMiniatureMerchant(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                ],
+              ),
+              const SizedBox(height: 32),
+
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(color: Colors.blueGrey[50], borderRadius: BorderRadius.circular(16)),
+                child: SizedBox(
+                  height: 70,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: List.generate(4, (i) {
+                      if (i < _localPlayers.length) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 20, 
+                                    backgroundColor: _avatarColors[i % 4], 
+                                    child: Text(_localPlayers[i][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                                  ),
+                                  Positioned(
+                                    right: -4, top: -4,
+                                    child: GestureDetector(
+                                      onTap: () => setState(() => _localPlayers.removeAt(i)),
+                                      child: Container(
+                                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                        child: const Icon(Icons.remove_circle, color: tTerra, size: 16)
+                                      )
                                     )
                                   )
-                                )
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(_localPlayers[i], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tInk))
-                          ],
-                        ),
-                      );
-                    } else if (i == _localPlayers.length && _localPlayers.length < 4) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 250),
-                              curve: Curves.easeOutBack,
-                              width: _isAddingPlayer ? 100 : 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: _isAddingPlayer ? Colors.white : const Color(0xFF8E44AD),
-                                borderRadius: BorderRadius.circular(20),
-                                border: _isAddingPlayer ? Border.all(color: const Color(0xFF8E44AD), width: 2) : null,
-                                boxShadow: _isAddingPlayer ? [] : [const BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)],
-                              ),
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  AnimatedOpacity(
-                                    opacity: _isAddingPlayer ? 0.0 : 1.0,
-                                    duration: const Duration(milliseconds: 150),
-                                    child: const Icon(Icons.add, color: Colors.white, size: 24),
-                                  ),
-                                  TextField(
-                                    controller: _nameCtrl,
-                                    focusNode: _nameFocusNode,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 12, 
-                                      fontWeight: FontWeight.bold, 
-                                      color: _isAddingPlayer ? tInk : Colors.transparent
-                                    ),
-                                    cursorColor: _isAddingPlayer ? const Color(0xFF8E44AD) : Colors.transparent,
-                                    decoration: InputDecoration(
-                                      contentPadding: const EdgeInsets.only(bottom: 12),
-                                      border: InputBorder.none,
-                                      focusedBorder: InputBorder.none,
-                                      enabledBorder: InputBorder.none,
-                                      hintText: _isAddingPlayer ? "Name" : "",
-                                      hintStyle: TextStyle(color: _isAddingPlayer ? Colors.grey : Colors.transparent, fontSize: 12),
-                                    ),
-                                    onSubmitted: (_) => _submitName(),
-                                  ),
                                 ],
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text("", style: TextStyle(fontSize: 10))
-                          ],
-                        ),
-                      );
-                    } else {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 40, height: 40, 
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle, 
-                                color: Colors.transparent, 
-                                border: Border.all(color: Colors.grey[400]!, width: 2)
-                              )
-                            ),
-                            const SizedBox(height: 4),
-                            const Text("", style: TextStyle(fontSize: 10))
-                          ]
-                        )
-                      );
-                    }
-                  }),
+                              const SizedBox(height: 4),
+                              Text(_localPlayers[i], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tInk))
+                            ],
+                          ),
+                        );
+                      } else if (i == _localPlayers.length && _localPlayers.length < 4) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeOutBack,
+                                width: _isAddingPlayer ? 100 : 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: _isAddingPlayer ? Colors.white : const Color(0xFF8E44AD),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: _isAddingPlayer ? Border.all(color: const Color(0xFF8E44AD), width: 2) : null,
+                                  boxShadow: _isAddingPlayer ? [] : [const BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)],
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    AnimatedOpacity(
+                                      opacity: _isAddingPlayer ? 0.0 : 1.0,
+                                      duration: const Duration(milliseconds: 150),
+                                      child: const Icon(Icons.add, color: Colors.white, size: 24),
+                                    ),
+                                    TextField(
+                                      controller: _nameCtrl,
+                                      focusNode: _nameFocusNode,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12, 
+                                        fontWeight: FontWeight.bold, 
+                                        color: _isAddingPlayer ? tInk : Colors.transparent
+                                      ),
+                                      cursorColor: _isAddingPlayer ? const Color(0xFF8E44AD) : Colors.transparent,
+                                      decoration: InputDecoration(
+                                        contentPadding: const EdgeInsets.only(bottom: 12),
+                                        border: InputBorder.none,
+                                        focusedBorder: InputBorder.none,
+                                        enabledBorder: InputBorder.none,
+                                        hintText: _isAddingPlayer ? "Name" : "",
+                                        hintStyle: TextStyle(color: _isAddingPlayer ? Colors.grey : Colors.transparent, fontSize: 12),
+                                      ),
+                                      onSubmitted: (_) => _submitName(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text("", style: TextStyle(fontSize: 10))
+                            ],
+                          ),
+                        );
+                      } else {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 40, height: 40, 
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle, 
+                                  color: Colors.transparent, 
+                                  border: Border.all(color: Colors.blueGrey[200]!, width: 2)
+                                )
+                              ),
+                              const SizedBox(height: 4),
+                              const Text("", style: TextStyle(fontSize: 10))
+                            ]
+                          )
+                        );
+                      }
+                    }),
+                  ),
                 ),
               ),
               const SizedBox(height: 48),
               PhysicsButton(
-                text: "START MATCH", 
-                color: canStart ? tTeal : Colors.grey[300]!, 
-                shadowColor: canStart ? const Color(0xFF1E7066) : Colors.grey[400]!,
-                onTap: () { if (canStart) _startLocalGame(); }
+                text: _selectedGame == 'mosaic' ? "START MOSAIC SESSION" : "START GEM SESSION", 
+                color: canStart ? (_selectedGame == 'mosaic' ? tTeal : const Color(0xFF8E44AD)) : Colors.grey[300]!, 
+                shadowColor: canStart ? (_selectedGame == 'mosaic' ? const Color(0xFF1E7066) : const Color(0xFF5E2B73)) : Colors.grey[400]!,
+                onTap: () { 
+                  if (canStart) {
+                    if (_selectedGame == 'mosaic') {
+                      _startLocalGame(); 
+                    } else {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const merchant.GemCrafterScreen()));
+                    }
+                  } 
+                }
               )
             ],
           )
@@ -751,7 +868,17 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
   @override
   Widget build(BuildContext context) {
     if (_inLobby) {
-      return Scaffold(backgroundColor: tBg, body: SafeArea(child: _buildLobby()));
+      return Scaffold(
+        backgroundColor: tBg, 
+        body: SafeArea(
+          child: Stack(
+            children: [
+              _buildTopBar(),
+              _buildLobby(),
+            ]
+          )
+        )
+      );
     }
 
     if (_gameState['status'] == "GAME_OVER" && !_isReviewingBoard) {
