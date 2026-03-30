@@ -27,9 +27,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
   @override
   void initState() {
     super.initState();
-    // V58 BUGFIX: Retain WebSocket URL to satisfy dart2js compiler
+    // V61 BUGFIX: Hardcode Render URL to satisfy the dart2js compiler requirement
     socketService.connect('wss://nolpan.onrender.com/ws');
     
+    // Dynamic text listener for the Action Button
+    _codeCtrl.addListener(() {
+      setState(() {});
+    });
+
     _sub = socketService.stream.listen((msg) {
       if (msg['type'] == 'ROOM_UPDATE') {
         if (mounted) {
@@ -62,7 +67,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
     super.dispose();
   }
 
-  // SPRINT 18.3: Smart Connection Logic
   void _handleConnect() {
     FocusScope.of(context).unfocus();
     String name = _nameCtrl.text.trim();
@@ -70,6 +74,19 @@ class _LobbyScreenState extends State<LobbyScreen> {
     
     socketService.playerName = name;
     String code = _codeCtrl.text.trim().toUpperCase();
+
+    // V61 QoL: Optimistic UI Transition
+    // This allows the user to immediately jump into the "Waiting Room" UI
+    // while the free-tier Render server takes 30-50 seconds to wake up from sleep.
+    setState(() {
+      _isJoined = true;
+      if (code.isNotEmpty) {
+        _roomCode = code;
+      } else {
+        _roomCode = "BOOTING...";
+      }
+      _players = [name]; // Optimistically show our own avatar
+    });
     
     if (code.isEmpty) {
       socketService.send('CREATE_ROOM', {'name': name});
@@ -115,6 +132,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
 
   Widget _buildEntryState() {
+    String dynamicButtonText = _codeCtrl.text.trim().isEmpty ? "CREATE ROOM" : "JOIN ROOM";
+
     return Center(
       child: Container(
         margin: const EdgeInsets.all(24), 
@@ -166,7 +185,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
             const SizedBox(height: 32),
             PhysicsButton(
-              text: "CONNECT", 
+              text: dynamicButtonText, 
               color: tTeal, 
               shadowColor: const Color(0xFF1E7066),
               onTap: _handleConnect
