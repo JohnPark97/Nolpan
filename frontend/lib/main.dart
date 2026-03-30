@@ -52,9 +52,7 @@ class _PhysicsButtonState extends State<PhysicsButton> {
   bool _isPressed = false;
   @override
   Widget build(BuildContext context) {
-    // Dynamically adjust text color based on button background (handles new Grey disabled state)
     Color contentColor = (widget.color == Colors.white || widget.color == tSurface || widget.color == Colors.grey[300]) ? tInk : Colors.white;
-    
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) { setState(() => _isPressed = false); widget.onTap(); },
@@ -62,7 +60,6 @@ class _PhysicsButtonState extends State<PhysicsButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
         curve: const Cubic(0.2, 0.8, 0.2, 1),
-        // SPRINT 16.2: Thicker Arcade Button Travel (6px)
         margin: EdgeInsets.only(top: _isPressed ? 6 : 0, bottom: _isPressed ? 0 : 6),
         width: widget.isFullWidth ? double.infinity : null,
         height: 60,

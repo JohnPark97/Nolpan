@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import 'lobby.dart';
 import 'local_play.dart';
-import 'sandbox.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
-  // SPRINT 16.2: Premium Tile Stack Logo Graphic
   Widget _buildLogoTile(Color color, IconData icon, double yOffset) {
     return Transform.translate(
       offset: Offset(0, yOffset),
@@ -37,7 +35,6 @@ class WelcomeScreen extends StatelessWidget {
             children: [
               const Spacer(),
               
-              // App Branding Overhaul
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -62,7 +59,6 @@ class WelcomeScreen extends StatelessWidget {
               
               const Spacer(),
 
-              // Navigation Buttons
               PhysicsButton(
                 text: "PLAY ONLINE",
                 color: tTeal,
@@ -71,21 +67,14 @@ class WelcomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               PhysicsButton(
-                text: "PASS & PLAY",
+                text: "OFFLINE MODE",
                 color: tGold,
                 shadowColor: const Color(0xFFB59A53),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LocalPlayScreen())),
               ),
-              const SizedBox(height: 16),
-              PhysicsButton(
-                text: "ANIMATION SANDBOX",
-                color: tIce,
-                shadowColor: const Color(0xFFB5BBC4),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SandboxScreen())),
-              ),
               
               const Spacer(),
-              const Text("v16.2 • Arcade Premium UI", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
+              const Text("v16.3 • Offline Mode Activated", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
             ],
           ),
         ),

@@ -394,6 +394,47 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     );
   }
 
+  Widget _buildBonusTrackers(List wall, {bool isOpp = false}) {
+    int rows = 0; int cols = 0; int colors = 0;
+    if (wall.isNotEmpty) {
+      for (int r = 0; r < 5; r++) { if (wall[r].where((s) => s == "").isEmpty) rows++; }
+      for (int c = 0; c < 5; c++) {
+        bool full = true;
+        for (int r = 0; r < 5; r++) { if (wall.length > r && wall[r].length > c && wall[r][c] == "") full = false; }
+        if (full) cols++;
+      }
+      for (String color in ['blue', 'yellow', 'red', 'black', 'amethyst']) {
+        int count = 0;
+        for (int r = 0; r < 5; r++) {
+          for (int c = 0; c < 5; c++) { 
+            if (wall.length > r && wall[r].length > c) {
+              String t = wall[r][c].toLowerCase();
+              if (t == color || (color == 'amethyst' && (t == 'purple' || t == 'white'))) {
+                count++;
+              }
+            }
+          }
+        }
+        if (count == 5) colors++;
+      }
+    }
+    double sz = isOpp ? 10 : 16;
+    double fz = isOpp ? 10 : 14;
+    return Padding(
+      padding: EdgeInsets.only(top: isOpp ? 4 : 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.menu, size: sz, color: Colors.grey[400]), Text(" $rows", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          SizedBox(width: isOpp ? 6 : 12),
+          Icon(Icons.view_column, size: sz, color: Colors.grey[400]), Text(" $cols", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+          SizedBox(width: isOpp ? 6 : 12),
+          Icon(Icons.diamond_outlined, size: sz, color: Colors.grey[400]), Text(" $colors", style: TextStyle(fontSize: fz, color: Colors.grey[500], fontWeight: FontWeight.bold)),
+        ],
+      )
+    );
+  }
+
   Widget _buildLobby() {
     bool canStart = _localPlayers.length >= 2;
 
@@ -411,17 +452,19 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
           children: [
             const Icon(Icons.people, size: 48, color: tTeal),
             const SizedBox(height: 16),
-            const Text("PASS & PLAY LOBBY", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: tInk)),
+            const Text("OFFLINE LOBBY", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: tInk)),
             const SizedBox(height: 32),
             SizedBox(
-              height: 60,
+              height: 70,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: List.generate(4, (i) {
                   if (i < _localPlayers.length) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           CircleAvatar(
                             radius: 20, 
@@ -435,53 +478,81 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                     );
                   } else if (i == _localPlayers.length && _localPlayers.length < 4) {
                     if (_isAddingPlayer) {
-                      return Container(
-                        width: 100, height: 40, margin: const EdgeInsets.symmetric(horizontal: 6),
-                        child: TextField(
-                          controller: _nameCtrl,
-                          autofocus: true,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                          decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.all(0),
-                            hintText: "Name",
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF8E44AD), width: 2)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF8E44AD), width: 2)),
-                          ),
-                          onSubmitted: (val) {
-                            if (val.trim().isNotEmpty) {
-                              setState(() { 
-                                _localPlayers.add(val.trim()); 
-                                _isAddingPlayer = false; 
-                                _nameCtrl.clear(); 
-                              });
-                            }
-                          },
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 100, height: 40,
+                              child: TextField(
+                                controller: _nameCtrl,
+                                autofocus: true,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                decoration: InputDecoration(
+                                  contentPadding: const EdgeInsets.all(0),
+                                  hintText: "Name",
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF8E44AD), width: 2)),
+                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF8E44AD), width: 2)),
+                                ),
+                                onSubmitted: (val) {
+                                  if (val.trim().isNotEmpty) {
+                                    setState(() { 
+                                      _localPlayers.add(val.trim()); 
+                                      _isAddingPlayer = false; 
+                                      _nameCtrl.clear(); 
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text("", style: TextStyle(fontSize: 10))
+                          ],
                         ),
                       );
                     } else {
-                      return GestureDetector(
-                        onTap: () => setState(() => _isAddingPlayer = true),
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 6), 
-                          width: 40, height: 40, 
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle, 
-                            color: Color(0xFF8E44AD), // SPRINT 16.2: Amethyst Pop
-                            boxShadow: [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]
-                          ), 
-                          child: const Icon(Icons.add, color: Colors.white, size: 24)
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () => setState(() => _isAddingPlayer = true),
+                              child: Container(
+                                width: 40, height: 40, 
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle, 
+                                  color: Color(0xFF8E44AD), 
+                                  boxShadow: [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]
+                                ), 
+                                child: const Icon(Icons.add, color: Colors.white, size: 24)
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text("", style: TextStyle(fontSize: 10))
+                          ],
                         ),
                       );
                     }
                   } else {
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 6), 
-                      width: 40, height: 40, 
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle, 
-                        color: Colors.transparent, // SPRINT 16.2: Hollow Slot
-                        border: Border.all(color: Colors.grey[400]!, width: 2)
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 40, height: 40, 
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle, 
+                              color: Colors.transparent, 
+                              border: Border.all(color: Colors.grey[400]!, width: 2)
+                            )
+                          ),
+                          const SizedBox(height: 4),
+                          const Text("", style: TextStyle(fontSize: 10))
+                        ]
                       )
                     );
                   }
@@ -489,7 +560,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
               ),
             ),
             const SizedBox(height: 48),
-            // SPRINT 16.2: Proper Grey Disabled State
             PhysicsButton(
               text: "START MATCH", 
               color: canStart ? tTeal : Colors.grey[300]!, 
@@ -539,7 +609,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
               ),
             Column(
               children: [
-                // Top Bar
+                // Top Bar: Dynamic Header
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
@@ -548,19 +618,16 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300), 
                         switchInCurve: Curves.easeOutBack,
-                        transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                        child: Container(
+                        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+                        child: Text(
+                          "CURRENT TURN: ${_turnPlayer.toUpperCase()}", 
                           key: ValueKey(_turnPlayer),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
+                          style: TextStyle(
                             color: _avatarColors[_localPlayers.indexOf(_turnPlayer) % 4], 
-                            borderRadius: BorderRadius.circular(12), 
-                            boxShadow: [const BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]
-                          ),
-                          child: Text(
-                            "TURN: " + _turnPlayer.toUpperCase(), 
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 1)
-                          ),
+                            fontWeight: FontWeight.w900, 
+                            fontSize: 12, 
+                            letterSpacing: 2
+                          )
                         )
                       ),
                       IconButton(icon: const Icon(Icons.settings, color: Colors.transparent, size: 24), onPressed: null)
@@ -568,7 +635,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                   ),
                 ),
 
-                // Opponents
+                // Opponents (1:1 Parity Applied)
                 Expanded(
                   flex: 22, 
                   child: Container(
@@ -579,6 +646,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                       children: opponents.map((opp) {
                         var board = _gameState['boards'][opp] ?? {};
                         List oppWall = board['wall'] ?? [];
+                        List oppFloor = board['floor_line'] ?? [];
                         List oppPattern = board['pattern_lines'] ?? [];
                         return Expanded(
                           child: Container(
@@ -662,6 +730,18 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                                     ),
                                   ),
                                 ),
+                                _buildBonusTrackers(oppWall, isOpp: true),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: List.generate(7, (i) {
+                                    String t = i < oppFloor.length ? oppFloor[i] : "";
+                                    return Container(
+                                      margin: const EdgeInsets.symmetric(horizontal: 2), width: 14, height: 14, 
+                                      decoration: BoxDecoration(color: t != "" ? _getBaseColor(t) : Colors.grey[200], borderRadius: BorderRadius.circular(2))
+                                    );
+                                  })
+                                )
                               ],
                             ),
                           ),
@@ -702,10 +782,11 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                                             heldKilnIdx = kIdx; 
                                             heldCount = fTiles.where((t) => t == c).length; 
                                           }); 
+                                          HapticFeedback.selectionClick();
                                         },
                                         child: AnimatedContainer(
                                           duration: const Duration(milliseconds: 150), curve: Curves.easeOutBack,
-                                          transform: isHeldLocally ? Matrix4.translationValues(0, -4.0, 0) : Matrix4.identity(),
+                                          transform: isHeldLocally ? Matrix4.translationValues(0, -6.0, 0) : Matrix4.identity(),
                                           child: _buildTile(c, size: 18, opacity: dim ? 0.3 : 1.0, scale: isHeldLocally ? 1.1 : 1.0)
                                         ),
                                       );
@@ -743,6 +824,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                                             heldKilnIdx = -1; 
                                             heldCount = (_gameState['center'] as List).where((t) => t == c).length; 
                                           }); 
+                                          HapticFeedback.selectionClick();
                                         },
                                         child: AnimatedContainer(
                                           duration: const Duration(milliseconds: 150), curve: Curves.easeOutBack,
@@ -848,6 +930,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                             ),
                           ),
                         ),
+                        _buildBonusTrackers(wall),
                         const SizedBox(height: 16),
                         GestureDetector(
                           onTap: heldColor != null ? () => _commitTurn(-1) : null,
