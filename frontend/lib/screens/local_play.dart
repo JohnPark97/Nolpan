@@ -29,6 +29,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
   // GAME ENGINE STATE
   Map<String, dynamic> _gameState = {};
   String _turnPlayer = "";
+  bool _isReviewingBoard = false;
   
   // PHYSICS STATE
   String? heldColor;
@@ -81,6 +82,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     };
 
     _turnPlayer = _localPlayers[0];
+    _isReviewingBoard = false;
     _drawTilesForRound();
     setState(() => _inLobby = false);
   }
@@ -152,6 +154,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
           newCenter.add(t);
         }
       }
+      // UPDATE STATE BEFORE EVALUATING ROUND OVER
       _gameState['center'] = newCenter;
     }
 
@@ -185,9 +188,18 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
       }
     }
 
-    bool roundOver = factories.every((f) => f.isEmpty) && center.where((t) => t != "first_player").isEmpty;
+    // SPRINT 16.4 BUGFIX: Clean array evaluation prevents stale-pointer freezing
+    bool isMarketEmpty = true;
+    for (var f in _gameState['factories']) {
+      if ((f as List).isNotEmpty) { isMarketEmpty = false; break; }
+    }
+    if (isMarketEmpty) {
+      for (var t in _gameState['center']) {
+        if (t != "first_player") { isMarketEmpty = false; break; }
+      }
+    }
 
-    if (roundOver) {
+    if (isMarketEmpty) {
       _scoreRound();
     } else {
       int currIdx = _localPlayers.indexOf(player);
@@ -248,7 +260,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
         }
       }
 
-      // 2. Penalties
+      // 2. Penalties & -1 Token Setup
       List<int> pens = [-1, -1, -2, -2, -2, -3, -3];
       for (int i = 0; i < board['floor_line'].length; i++) {
         String t = board['floor_line'][i];
@@ -267,6 +279,58 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
       // 3. Clamp
       if (board['score'] < 0) board['score'] = 0;
       board['floor_line'] = [];
+    }
+
+    // SPRINT 16.4: E2E Game Over Detection
+    bool isGameOver = false;
+    for (String p in _localPlayers) {
+      var board = _gameState['boards'][p];
+      for (int r = 0; r < 5; r++) {
+        bool rowComplete = true;
+        for (int c = 0; c < 5; c++) {
+          if (board['wall'][r][c] == "") { rowComplete = false; break; }
+        }
+        if (rowComplete) { isGameOver = true; break; }
+      }
+    }
+
+    if (isGameOver) {
+      _gameState['status'] = "GAME_OVER";
+      for (String p in _localPlayers) {
+        var b = _gameState['boards'][p];
+        
+        // +2 Row Bonus
+        for (int r = 0; r < 5; r++) {
+          bool rowComplete = true;
+          for (int c = 0; c < 5; c++) {
+            if (b['wall'][r][c] == "") { rowComplete = false; break; }
+          }
+          if (rowComplete) b['score'] += 2;
+        }
+        
+        // +7 Column Bonus
+        for (int c = 0; c < 5; c++) {
+          bool colComplete = true;
+          for (int r = 0; r < 5; r++) {
+            if (b['wall'][r][c] == "") { colComplete = false; break; }
+          }
+          if (colComplete) b['score'] += 7;
+        }
+        
+        // +10 Color Bonus
+        for (String color in ['blue', 'yellow', 'red', 'black', 'amethyst']) {
+          int count = 0;
+          for (int r = 0; r < 5; r++) {
+            for (int c = 0; c < 5; c++) {
+              String t = b['wall'][r][c].toLowerCase();
+              if (t == color || (color == 'amethyst' && (t == 'purple' || t == 'white'))) count++;
+            }
+          }
+          if (count == 5) b['score'] += 10;
+        }
+      }
+      setState(() { _showShatter = false; });
+      return;
     }
 
     _gameState['center'] = ["first_player"];
@@ -437,7 +501,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
 
   Widget _buildLobby() {
     bool canStart = _localPlayers.length >= 2;
-
     return Center(
       child: Container(
         margin: const EdgeInsets.all(24), 
@@ -572,13 +635,67 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     );
   }
 
+  // SPRINT 16.4: Victory Screen Modal
+  Widget _buildGameOverScreen() {
+    List<String> ranked = List.from(_localPlayers);
+    ranked.sort((a, b) => (_gameState['boards'][b]['score'] as int).compareTo(_gameState['boards'][a]['score'] as int));
+    
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(24), 
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.circular(24), 
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20)]
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.emoji_events, size: 64, color: tGold),
+            const SizedBox(height: 16),
+            const Text("MATCH COMPLETE", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: tInk)),
+            const SizedBox(height: 32),
+            ...ranked.map((p) {
+              bool isWinner = p == ranked.first;
+              int score = _gameState['boards'][p]['score'];
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(radius: 12, backgroundColor: _avatarColors[_localPlayers.indexOf(p) % 4], child: Text(p[0].toUpperCase(), style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))),
+                        const SizedBox(width: 8),
+                        Text(p, style: TextStyle(fontSize: 14, fontWeight: isWinner ? FontWeight.w900 : FontWeight.bold, color: tInk)),
+                      ]
+                    ),
+                    Text(score.toString(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: isWinner ? tTeal : tInk)),
+                  ]
+                )
+              );
+            }).toList(),
+            const SizedBox(height: 48),
+            PhysicsButton(text: "REVIEW BOARDS", color: tIce, shadowColor: Colors.grey[400]!, onTap: () => setState(() => _isReviewingBoard = true)),
+            const SizedBox(height: 16),
+            PhysicsButton(text: "PLAY AGAIN", color: tTeal, shadowColor: const Color(0xFF1E7066), onTap: _startLocalGame),
+            const SizedBox(height: 16),
+            PhysicsButton(text: "EXIT TO LOBBY", color: tTerra, shadowColor: const Color(0xFFB3563F), onTap: () => setState(() { _inLobby = true; _isReviewingBoard = false; })),
+          ]
+        )
+      )
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_inLobby) {
-      return Scaffold(
-        backgroundColor: tBg, 
-        body: SafeArea(child: _buildLobby())
-      );
+      return Scaffold(backgroundColor: tBg, body: SafeArea(child: _buildLobby()));
+    }
+
+    if (_gameState['status'] == "GAME_OVER" && !_isReviewingBoard) {
+      return Scaffold(backgroundColor: tBg, body: SafeArea(child: _buildGameOverScreen()));
     }
 
     List<String> opponents = _localPlayers.where((p) => p != _turnPlayer).toList();
@@ -587,6 +704,8 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     List wall = myBoard['wall'] ?? [];
     List floor = myBoard['floor_line'] ?? [];
     const List<String> shatterPenalties = ['-1', '-1', '-2', '-2', '-2', '-3', '-3'];
+
+    bool canPick = _gameState['status'] != "GAME_OVER";
 
     return Scaffold(
       backgroundColor: tBg,
@@ -609,33 +728,46 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
               ),
             Column(
               children: [
-                // Top Bar: Dynamic Header
+                // Top Bar
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300), 
-                        switchInCurve: Curves.easeOutBack,
-                        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-                        child: Text(
-                          "CURRENT TURN: ${_turnPlayer.toUpperCase()}", 
-                          key: ValueKey(_turnPlayer),
-                          style: TextStyle(
-                            color: _avatarColors[_localPlayers.indexOf(_turnPlayer) % 4], 
-                            fontWeight: FontWeight.w900, 
-                            fontSize: 12, 
-                            letterSpacing: 2
+                      if (_gameState['status'] == "GAME_OVER")
+                        const Text("REVIEWING BOARDS", style: TextStyle(color: tInk, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 2))
+                      else
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300), 
+                          switchInCurve: Curves.easeOutBack,
+                          transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+                          child: Text(
+                            "CURRENT TURN: ${_turnPlayer.toUpperCase()}", 
+                            key: ValueKey(_turnPlayer),
+                            style: TextStyle(
+                              color: _avatarColors[_localPlayers.indexOf(_turnPlayer) % 4], 
+                              fontWeight: FontWeight.w900, 
+                              fontSize: 12, 
+                              letterSpacing: 2
+                            )
+                          )
+                        ),
+                      if (_gameState['status'] == "GAME_OVER")
+                        GestureDetector(
+                          onTap: () => setState(() => _isReviewingBoard = false),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(color: tTeal, borderRadius: BorderRadius.circular(12)),
+                            child: const Text("RESULTS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
                           )
                         )
-                      ),
-                      IconButton(icon: const Icon(Icons.settings, color: Colors.transparent, size: 24), onPressed: null)
+                      else
+                        IconButton(icon: const Icon(Icons.settings, color: Colors.transparent, size: 24), onPressed: null)
                     ]
                   ),
                 ),
 
-                // Opponents (1:1 Parity Applied)
+                // Opponents
                 Expanded(
                   flex: 22, 
                   child: Container(
@@ -764,7 +896,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                           children: List.generate(_gameState['factories'].length, (kIdx) {
                             List<String> fTiles = _gameState['factories'][kIdx];
                             return Opacity(
-                              opacity: fTiles.isEmpty ? 0.2 : 1.0,
+                              opacity: fTiles.isEmpty || !canPick ? 0.2 : 1.0,
                               child: Container(
                                 key: factoryKeys[kIdx], 
                                 width: 54, height: 54, 
@@ -776,7 +908,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                                       bool isHeldLocally = heldColor == c && heldKilnIdx == kIdx;
                                       bool dim = heldKilnIdx == kIdx && !isHeldLocally;
                                       return GestureDetector(
-                                        onTap: () { 
+                                        onTap: !canPick ? null : () { 
                                           setState(() { 
                                             heldColor = c; 
                                             heldKilnIdx = kIdx; 
@@ -818,7 +950,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                                     children: (_gameState['center'] as List<String>).map((c) {
                                       bool isHeldLocally = heldColor == c && heldKilnIdx == -1;
                                       return GestureDetector(
-                                        onTap: c == "first_player" ? null : () { 
+                                        onTap: (c == "first_player" || !canPick) ? null : () { 
                                           setState(() { 
                                             heldColor = c; 
                                             heldKilnIdx = -1; 
@@ -864,9 +996,9 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: List.generate(5, (rIdx) {
-                                    bool isLegal = heldColor != null; 
+                                    bool isLegal = heldColor != null && canPick; 
                                     return GestureDetector(
-                                      onTap: heldColor != null ? () => _commitTurn(rIdx) : null,
+                                      onTap: heldColor != null && canPick ? () => _commitTurn(rIdx) : null,
                                       onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
                                       child: Container(
                                         key: patternRowKeys[rIdx], margin: const EdgeInsets.symmetric(vertical: 2), color: Colors.transparent,
@@ -933,7 +1065,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                         _buildBonusTrackers(wall),
                         const SizedBox(height: 16),
                         GestureDetector(
-                          onTap: heldColor != null ? () => _commitTurn(-1) : null,
+                          onTap: heldColor != null && canPick ? () => _commitTurn(-1) : null,
                           onPanUpdate: (_) => setState(() => hoveredRow = -1),
                           child: Container(
                             key: floorKey, 
