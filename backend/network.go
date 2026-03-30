@@ -39,10 +39,15 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			if room, ok := rooms[currentRoomCode]; ok {
 				room.mu.Lock()
 				delete(room.Clients, ws)
-				var newPlayers []string
-				for _, p := range room.Players { if p != currentName { newPlayers = append(newPlayers, p) } }
-				room.Players = newPlayers
-				isEmpty := len(room.Players) == 0
+				
+                // V66 BUGFIX: Only wipe from Player array if game hasn't started!
+                // This preserves the turn-math state if a player drops out mid-game.
+                if room.State == nil {
+				    var newPlayers []string
+				    for _, p := range room.Players { if p != currentName { newPlayers = append(newPlayers, p) } }
+				    room.Players = newPlayers
+                }
+				isEmpty := len(room.Clients) == 0
 				room.mu.Unlock()
 
 				if isEmpty {
@@ -51,7 +56,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 						roomsMu.Lock()
 						if r, stillExists := rooms[code]; stillExists {
 							r.mu.Lock()
-							if len(r.Players) == 0 { delete(rooms, code) }
+							if len(r.Clients) == 0 { delete(rooms, code) }
 							r.mu.Unlock()
 						}
 						roomsMu.Unlock()
@@ -80,6 +85,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			if room, exists := rooms[p.Code]; exists {
 				currentRoomCode = p.Code; currentName = p.Name
 				room.Clients[ws] = p.Name
+                
+                // V66 BUGFIX: Ensure reconnected players are in the slice
+                inPlayers := false
+                for _, name := range room.Players {
+                    if name == p.Name { inPlayers = true; break }
+                }
+                if !inPlayers { room.Players = append(room.Players, p.Name) }
+
 				if room.State != nil {
 					data, _ := json.Marshal(map[string]interface{}{"type": "GAME_UPDATE", "payload": room.State})
 					ws.WriteMessage(websocket.TextMessage, data)
@@ -107,7 +120,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.Clients[ws] = p.Name
 				broadcastRoom(room)
 			} else {
-                // SPRINT 18.5 FIX: Auto-Create custom room codes!
+                // V66: Auto-Create custom room codes!
                 currentRoomCode = p.Code; currentName = p.Name
                 rooms[p.Code] = &Room{Code: p.Code, Players: []string{p.Name}, Clients: make(map[*websocket.Conn]string), GameType: "mosaic"}
                 rooms[p.Code].Clients[ws] = p.Name

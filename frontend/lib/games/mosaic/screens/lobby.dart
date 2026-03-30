@@ -12,10 +12,7 @@ class LobbyScreen extends StatefulWidget {
 }
 
 class _LobbyScreenState extends State<LobbyScreen> {
-  // CONNECTION STATE
   bool _isJoined = false;
-  
-  // LOBBY DATA
   String _roomCode = "";
   List<String> _players = [];
   String _selectedGame = "mosaic";
@@ -28,10 +25,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void initState() {
     super.initState();
     socketService.connect('wss://nolpan.onrender.com/ws');
-    
-    _codeCtrl.addListener(() {
-      setState(() {});
-    });
+    _codeCtrl.addListener(() { setState(() {}); });
 
     _sub = socketService.stream.listen((msg) {
       if (msg['type'] == 'ROOM_UPDATE') {
@@ -48,7 +42,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         if (mounted) {
           _sub.cancel();
           if (_selectedGame == 'mosaic') {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => GameScreen(initialState: msg['payload'])));
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => GameScreen(roomCode: _roomCode, initialState: msg['payload'])));
           } else {
             Navigator.pushReplacementNamed(context, '/merchant');
           }
@@ -260,7 +254,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   child: GestureDetector(
                     onTap: () => _changeGame('mosaic'),
                     child: AnimatedContainer(
-                      height: 100, // SPRINT 18.5 FIX: Fixed height for layout consistency
+                      height: 100,
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
@@ -284,7 +278,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   child: GestureDetector(
                     onTap: () => _changeGame('merchant'),
                     child: AnimatedContainer(
-                      height: 100, // SPRINT 18.5 FIX: Fixed height for layout consistency
+                      height: 100,
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
@@ -337,7 +331,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       child: Column(
                         children: [
                           Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.blueGrey[200]!, style: BorderStyle.solid, width: 2)), child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueGrey[200])))),
-                          // SPRINT 18.5 FIX: Removed "Waiting..." text
                         ],
                       ),
                     );
