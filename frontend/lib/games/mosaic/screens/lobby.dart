@@ -14,7 +14,6 @@ class LobbyScreen extends StatefulWidget {
 class _LobbyScreenState extends State<LobbyScreen> {
   // CONNECTION STATE
   bool _isJoined = false;
-  bool _isCreateMode = true; // SPRINT 18.4: Restored segmented toggle state
   
   // LOBBY DATA
   String _roomCode = "";
@@ -30,6 +29,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
     super.initState();
     socketService.connect('wss://nolpan.onrender.com/ws');
     
+    _codeCtrl.addListener(() {
+      setState(() {});
+    });
+
     _sub = socketService.stream.listen((msg) {
       if (msg['type'] == 'ROOM_UPDATE') {
         if (mounted) {
@@ -68,22 +71,21 @@ class _LobbyScreenState extends State<LobbyScreen> {
     if (name.isEmpty) return;
     
     socketService.playerName = name;
-    
-    if (_isCreateMode) {
-      setState(() {
-        _isJoined = true;
+    String code = _codeCtrl.text.trim().toUpperCase();
+
+    setState(() {
+      _isJoined = true;
+      if (code.isNotEmpty) {
+        _roomCode = code;
+      } else {
         _roomCode = "BOOTING...";
-        _players = [name];
-      });
+      }
+      _players = [name];
+    });
+    
+    if (code.isEmpty) {
       socketService.send('CREATE_ROOM', {'name': name});
     } else {
-      String code = _codeCtrl.text.trim().toUpperCase();
-      if (code.isEmpty) return;
-      setState(() {
-        _isJoined = true;
-        _roomCode = code;
-        _players = [name];
-      });
       socketService.send('JOIN_ROOM', {'name': name, 'code': code});
     }
   }
@@ -103,26 +105,30 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   Widget _buildTopBar() {
     return Padding(
-      padding: const EdgeInsets.only(left: 24, top: 24),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          FocusScope.of(context).unfocus();
-          Navigator.pop(context);
-        },
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.arrow_back, color: Colors.blueGrey[400], size: 14),
-            const SizedBox(width: 4),
-            Text("BACK", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[400], letterSpacing: 1.5))
-          ],
-        ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              Navigator.pop(context);
+            },
+            child: const Row(
+              children: [
+                Icon(Icons.arrow_back, color: Colors.blueGrey, size: 16),
+                SizedBox(width: 4),
+                Text("BACK", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey, letterSpacing: 1.5))
+              ],
+            ),
+          )
+        ],
       ),
     );
   }
 
   Widget _buildEntryState() {
+    String dynamicButtonText = _codeCtrl.text.trim().isEmpty ? "CREATE ROOM" : "JOIN ROOM";
+
     return Center(
       child: Container(
         margin: const EdgeInsets.all(24), 
@@ -137,84 +143,44 @@ class _LobbyScreenState extends State<LobbyScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text("NETWORK SETUP", textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: tInk)),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             
-            // SPRINT 18.4: Restored Segmented Toggle
-            Container(
-              height: 44,
-              decoration: BoxDecoration(color: Colors.blueGrey[50], borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _isCreateMode = true),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: _isCreateMode ? Colors.white : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: _isCreateMode ? [const BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0,1))] : []
-                        ),
-                        child: Center(child: Text("CREATE ROOM", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _isCreateMode ? tTeal : Colors.blueGrey[400]))),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _isCreateMode = false),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: !_isCreateMode ? Colors.white : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: !_isCreateMode ? [const BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0,1))] : []
-                        ),
-                        child: Center(child: Text("JOIN ROOM", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: !_isCreateMode ? tTeal : Colors.blueGrey[400]))),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // SPRINT 18.4: Arcade-styled Text Inputs
             TextField(
               controller: _nameCtrl,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tInk),
               decoration: InputDecoration(
-                hintText: "Your Name (e.g. Boss)",
-                hintStyle: TextStyle(color: Colors.blueGrey[300], fontWeight: FontWeight.bold),
+                hintText: "Your Name",
+                hintStyle: TextStyle(color: Colors.blueGrey[300]),
                 filled: true,
-                fillColor: Colors.blueGrey[50],
+                fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!, width: 2)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!, width: 2)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
                 focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: tTeal, width: 2)),
               ),
             ),
             
-            if (!_isCreateMode) ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _codeCtrl,
-                textCapitalization: TextCapitalization.characters,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tInk),
-                decoration: InputDecoration(
-                  hintText: "4-Digit Code",
-                  hintStyle: TextStyle(color: Colors.blueGrey[300], fontWeight: FontWeight.bold),
-                  filled: true,
-                  fillColor: Colors.blueGrey[50],
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!, width: 2)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!, width: 2)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: tTeal, width: 2)),
-                ),
+            const SizedBox(height: 12),
+            
+            TextField(
+              controller: _codeCtrl,
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tInk),
+              decoration: InputDecoration(
+                hintText: "Room Code (Optional)",
+                hintStyle: TextStyle(color: Colors.blueGrey[300]),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: tTeal, width: 2)),
               ),
-            ],
+            ),
 
             const SizedBox(height: 32),
             PhysicsButton(
-              text: _isCreateMode ? "HOST MATCH" : "CONNECT", 
+              text: dynamicButtonText, 
               color: tTeal, 
               shadowColor: const Color(0xFF1E7066),
               onTap: _handleConnect
@@ -275,7 +241,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("ONLINE MATCHMAKING", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 2)),
+            const Text("ONLINE LOBBY", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 2)),
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -294,6 +260,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   child: GestureDetector(
                     onTap: () => _changeGame('mosaic'),
                     child: AnimatedContainer(
+                      height: 100, // SPRINT 18.5 FIX: Fixed height for layout consistency
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
@@ -306,7 +273,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                         children: [
                           Text("MOSAIC DRAFT", style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: _selectedGame == 'mosaic' ? tTeal : Colors.blueGrey[300], letterSpacing: 1)),
                           const SizedBox(height: 12),
-                          _buildMiniatureMosaic(),
+                          Expanded(child: Center(child: _buildMiniatureMosaic())),
                         ],
                       ),
                     ),
@@ -317,6 +284,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   child: GestureDetector(
                     onTap: () => _changeGame('merchant'),
                     child: AnimatedContainer(
+                      height: 100, // SPRINT 18.5 FIX: Fixed height for layout consistency
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
@@ -329,7 +297,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                         children: [
                           Text("GEM CRAFTER", style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: _selectedGame == 'merchant' ? const Color(0xFF8E44AD) : Colors.blueGrey[300], letterSpacing: 1)),
                           const SizedBox(height: 12),
-                          _buildMiniatureMerchant(),
+                          Expanded(child: Center(child: _buildMiniatureMerchant())),
                         ],
                       ),
                     ),
@@ -369,13 +337,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
                       child: Column(
                         children: [
                           Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.blueGrey[200]!, style: BorderStyle.solid, width: 2)), child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueGrey[200])))),
-                          const SizedBox(height: 6),
-                          Text("Waiting...", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey[300]))
+                          // SPRINT 18.5 FIX: Removed "Waiting..." text
                         ],
                       ),
                     );
                   } else {
-                    return Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Column(children: [Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.blueGrey[100]!.withOpacity(0.5))), const SizedBox(height: 6), const Text("", style: TextStyle(fontSize: 10))]));
+                    return Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Column(children: [Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.blueGrey[100]!.withOpacity(0.5)))]));
                   }
                 }),
               ),
@@ -384,7 +351,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
             if (isHost)
               PhysicsButton(
-                text: "START ${_selectedGame.toUpperCase()} SESSION", 
+                text: "START GAME", 
                 color: _selectedGame == 'mosaic' ? tTeal : const Color(0xFF8E44AD), 
                 shadowColor: _selectedGame == 'mosaic' ? const Color(0xFF1E7066) : const Color(0xFF5E2B73),
                 onTap: () { if (canStart) _startGame(); }
@@ -415,19 +382,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
     return Scaffold(
       backgroundColor: tBg,
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
             if (!_isJoined) _buildTopBar(),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation, 
-                  child: ScaleTransition(scale: Tween<double>(begin: 0.95, end: 1.0).animate(animation), child: child)
-                ),
-                child: _isJoined ? _buildWaitingRoomState() : _buildEntryState()
-              ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: ScaleTransition(scale: Tween<double>(begin: 0.95, end: 1.0).animate(animation), child: child)),
+              child: _isJoined ? _buildWaitingRoomState() : _buildEntryState()
             ),
           ],
         ),

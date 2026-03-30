@@ -14,7 +14,7 @@ type Room struct {
 	Players  []string
 	Clients  map[*websocket.Conn]string
 	State    *GameState
-	GameType string // SPRINT 18.2b: Support Multi-Game Types
+	GameType string
 	mu       sync.RWMutex
 }
 
@@ -106,15 +106,19 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.Players = append(room.Players, p.Name)
 				room.Clients[ws] = p.Name
 				broadcastRoom(room)
-			}
+			} else {
+                // SPRINT 18.5 FIX: Auto-Create custom room codes!
+                currentRoomCode = p.Code; currentName = p.Name
+                rooms[p.Code] = &Room{Code: p.Code, Players: []string{p.Name}, Clients: make(map[*websocket.Conn]string), GameType: "mosaic"}
+                rooms[p.Code].Clients[ws] = p.Name
+                broadcastRoom(rooms[p.Code])
+            }
 		}
 
-        // SPRINT 18.2b: Allow host to toggle game modes
         if msg.Type == "CHANGE_GAME" {
             var p struct { Code string `json:"code"`; Game string `json:"game"` }
             json.Unmarshal(msg.Payload, &p)
             if room, exists := rooms[p.Code]; exists {
-                // Security check (only host can change)
                 if len(room.Players) > 0 && room.Players[0] == currentName {
                     room.GameType = p.Game
                     broadcastRoom(room)
@@ -126,7 +130,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			var p struct{ Code string `json:"code"` }
 			json.Unmarshal(msg.Payload, &p)
 			if room, ok := rooms[p.Code]; ok {
-                // Initialize specific game engine state here later. For now, boot Mosaic.
 				room.State = generateInitialState(room.Players)
 				broadcastMessage(room, "GAME_STARTED", room.State)
 			}
@@ -137,7 +140,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			json.Unmarshal(msg.Payload, &p)
 			if room, ok := rooms[p.Code]; ok {
 				room.State = nil 
-				broadcastRoom(room) // SPRINT 18.2b: Use standard broadcastRoom to resync full state
+				broadcastRoom(room)
 			}
 		}
 
