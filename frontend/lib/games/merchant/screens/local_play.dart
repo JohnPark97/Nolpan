@@ -80,7 +80,7 @@ class GemCrafterScreen extends StatelessWidget {
                 decoration: BoxDecoration(color: const Color(0xFF2A9D8F), borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0,1), blurRadius: 2)]),
                 child: const Text("CURRENT TURN: PLAYER 1", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
               ),
-              Text("GEM CRAFTER", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.slate[400], letterSpacing: 2)),
+              Text("GEM CRAFTER", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey[400], letterSpacing: 2)),
             ],
           ),
           const SizedBox(height: 6),
@@ -221,20 +221,20 @@ class GemCrafterScreen extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text("SCORE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.slate[400], letterSpacing: 1.5)),
+                  Text("SCORE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey[400], letterSpacing: 1.5)),
                   const SizedBox(width: 8),
                   const Text("12", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF2A9D8F), height: 1)),
                 ],
               ),
               Row(
                 children: [
-                  Text("RESERVED", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.slate[400], letterSpacing: 1.5)),
+                  Text("RESERVED", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey[400], letterSpacing: 1.5)),
                   const SizedBox(width: 6),
                   Container(width: 20, height: 28, decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.amber[400]!, width: 2))),
                   const SizedBox(width: 4),
-                  Container(width: 20, height: 28, decoration: BoxDecoration(color: Colors.slate[50], borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.slate[200]!))),
+                  Container(width: 20, height: 28, decoration: BoxDecoration(color: Colors.blueGrey[50], borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.blueGrey[200]!))),
                   const SizedBox(width: 4),
-                  Container(width: 20, height: 28, decoration: BoxDecoration(borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.slate[300]!, style: BorderStyle.solid))),
+                  Container(width: 20, height: 28, decoration: BoxDecoration(borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.blueGrey[300]!, style: BorderStyle.solid))),
                 ],
               )
             ],
@@ -256,14 +256,14 @@ class GemCrafterScreen extends StatelessWidget {
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: const Color(0xFFF9F7F3), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.slate[200]!)),
+            decoration: BoxDecoration(color: const Color(0xFFF9F7F3), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey[200]!)),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("TOKENS IN HAND", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.slate[400], letterSpacing: 1.5)),
-                    Text("8 / 10", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.slate[500])),
+                    Text("TOKENS IN HAND", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey[400], letterSpacing: 1.5)),
+                    Text("8 / 10", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey[500])),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -278,9 +278,9 @@ class GemCrafterScreen extends StatelessWidget {
                     const Align(widthFactor: 0.7, child: WalletToken(gem: GemPalette.wild)),
                     const Align(widthFactor: 0.7, child: WalletToken(gem: GemPalette.wild)),
                     const Spacer(),
-                    Container(width: 28, height: 28, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.slate[300]!))),
+                    Container(width: 28, height: 28, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.blueGrey[300]!))),
                     const SizedBox(width: 4),
-                    Container(width: 28, height: 28, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.slate[300]!))),
+                    Container(width: 28, height: 28, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.blueGrey[300]!))),
                   ],
                 )
               ],
@@ -314,7 +314,7 @@ class OpponentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.slate[200]!)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blueGrey[200]!)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -412,7 +412,7 @@ class DeckCard extends StatelessWidget {
   Widget build(BuildContext context) {
     String numeral = tier == 3 ? "III" : (tier == 2 ? "II" : "I");
     return Container(
-      decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.slate[600]!), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 2)]),
+      decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.blueGrey[600]!), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 2)]),
       child: Stack(
         children: [
           Center(child: Text(numeral, style: TextStyle(color: textColor.withOpacity(0.8), fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -2))),
@@ -433,7 +433,7 @@ class MarketCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.slate[200]!), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 2)]),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.blueGrey[200]!), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 2)]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -442,7 +442,7 @@ class MarketCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(points > 0 ? points.toString() : "", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.slate[700], height: 1)),
+              Text(points > 0 ? points.toString() : "", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[700], height: 1)),
               _buildGemIcon(gem, 14, color: gem.color),
             ],
           ),
@@ -480,8 +480,8 @@ class BankToken extends StatelessWidget {
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: Colors.slate[200], borderRadius: BorderRadius.circular(12)),
-            child: Text(count.toString(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.slate[600], height: 1)),
+            decoration: BoxDecoration(color: Colors.blueGrey[200], borderRadius: BorderRadius.circular(12)),
+            child: Text(count.toString(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[600], height: 1)),
           )
         ],
       ),
@@ -500,14 +500,14 @@ class EngineBlock extends StatelessWidget {
     return Container(
       height: 40,
       decoration: BoxDecoration(
-        color: active ? gem.color : Colors.slate[100],
+        color: active ? gem.color : Colors.blueGrey[100],
         borderRadius: BorderRadius.circular(8),
-        border: active ? const Border(bottom: BorderSide(color: Colors.black26, width: 3)) : Border.all(color: Colors.slate[200]!, width: 2),
+        border: active ? const Border(bottom: BorderSide(color: Colors.black26, width: 3)) : Border.all(color: Colors.blueGrey[200]!, width: 2),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(count.toString(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: active ? Colors.white : Colors.slate[300], height: 1)),
+          Text(count.toString(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: active ? Colors.white : Colors.blueGrey[300], height: 1)),
           if (active) Padding(padding: const EdgeInsets.only(top: 2), child: _buildGemIcon(gem, 8)),
         ],
       ),
