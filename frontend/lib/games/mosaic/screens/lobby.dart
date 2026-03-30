@@ -14,7 +14,6 @@ class LobbyScreen extends StatefulWidget {
 class _LobbyScreenState extends State<LobbyScreen> {
   // CONNECTION STATE
   bool _isJoined = false;
-  bool _isCreateMode = true;
   
   // LOBBY DATA
   String _roomCode = "";
@@ -28,7 +27,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   @override
   void initState() {
     super.initState();
-    // V57 BUGFIX: Provide the required WebSocket URL argument to the connect method.
+    // V58 BUGFIX: Retain WebSocket URL to satisfy dart2js compiler
     socketService.connect('wss://nolpan.onrender.com/ws');
     
     _sub = socketService.stream.listen((msg) {
@@ -63,18 +62,18 @@ class _LobbyScreenState extends State<LobbyScreen> {
     super.dispose();
   }
 
+  // SPRINT 18.3: Smart Connection Logic
   void _handleConnect() {
     FocusScope.of(context).unfocus();
     String name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
     
     socketService.playerName = name;
+    String code = _codeCtrl.text.trim().toUpperCase();
     
-    if (_isCreateMode) {
+    if (code.isEmpty) {
       socketService.send('CREATE_ROOM', {'name': name});
     } else {
-      String code = _codeCtrl.text.trim().toUpperCase();
-      if (code.isEmpty) return;
       socketService.send('JOIN_ROOM', {'name': name, 'code': code});
     }
   }
@@ -130,50 +129,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text("NETWORK SETUP", textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: tInk)),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             
-            Container(
-              height: 44,
-              decoration: BoxDecoration(color: Colors.blueGrey[50], borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _isCreateMode = true),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: _isCreateMode ? Colors.white : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: _isCreateMode ? [const BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0,1))] : []
-                        ),
-                        child: Center(child: Text("CREATE ROOM", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _isCreateMode ? tTeal : Colors.blueGrey[400]))),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _isCreateMode = false),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: !_isCreateMode ? Colors.white : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: !_isCreateMode ? [const BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0,1))] : []
-                        ),
-                        child: Center(child: Text("JOIN ROOM", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: !_isCreateMode ? tTeal : Colors.blueGrey[400]))),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
             TextField(
               controller: _nameCtrl,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tInk),
               decoration: InputDecoration(
-                hintText: "Your Name (e.g. Boss)",
+                hintText: "Your Name",
                 hintStyle: TextStyle(color: Colors.blueGrey[300]),
                 filled: true,
                 fillColor: Colors.white,
@@ -184,28 +146,27 @@ class _LobbyScreenState extends State<LobbyScreen> {
               ),
             ),
             
-            if (!_isCreateMode) ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _codeCtrl,
-                textCapitalization: TextCapitalization.characters,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tInk),
-                decoration: InputDecoration(
-                  hintText: "4-Digit Code",
-                  hintStyle: TextStyle(color: Colors.blueGrey[300]),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: tTeal, width: 2)),
-                ),
+            const SizedBox(height: 12),
+            
+            TextField(
+              controller: _codeCtrl,
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tInk),
+              decoration: InputDecoration(
+                hintText: "Room Code (Optional)",
+                hintStyle: TextStyle(color: Colors.blueGrey[300]),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: tTeal, width: 2)),
               ),
-            ],
+            ),
 
             const SizedBox(height: 32),
             PhysicsButton(
-              text: _isCreateMode ? "HOST NEW MATCH" : "JOIN MATCH", 
+              text: "CONNECT", 
               color: tTeal, 
               shadowColor: const Color(0xFF1E7066),
               onTap: _handleConnect
