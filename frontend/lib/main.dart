@@ -4,6 +4,7 @@ import 'screens/welcome.dart';
 import 'games/mosaic/screens/sandbox.dart';
 import 'games/mosaic/screens/local_play.dart';
 import 'games/mosaic/screens/lobby.dart';
+import 'games/merchant/screens/local_play.dart' as merchant;
 
 final socketService = SocketService();
 
@@ -23,6 +24,7 @@ void main() {
       '/': (context) => const WelcomeScreen(),
       '/sandbox': (context) => const SandboxScreen(),
       '/local': (context) => const LocalPlayScreen(),
+      '/merchant': (context) => const merchant.GemCrafterScreen(),
     },
   ));
 }

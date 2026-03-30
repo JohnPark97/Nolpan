@@ -3,7 +3,7 @@ import '../main.dart';
 import '../core/ui/physics_button.dart';
 import '../games/mosaic/screens/lobby.dart';
 import '../games/mosaic/screens/local_play.dart';
-import '../games/mosaic/screens/sandbox.dart';
+import '../games/merchant/screens/local_play.dart' as merchant;
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -54,7 +54,7 @@ class WelcomeScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900, letterSpacing: 10, color: tInk),
               ),
               const Text(
-                "MOSAIC DRAFT",
+                "PLATFORM",
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 6, color: tTeal),
               ),
@@ -62,21 +62,28 @@ class WelcomeScreen extends StatelessWidget {
               const Spacer(),
 
               PhysicsButton(
-                text: "PLAY ONLINE",
+                text: "MOSAIC DRAFT (ONLINE)",
                 color: tTeal,
                 shadowColor: const Color(0xFF1E7066),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LobbyScreen())),
               ),
               const SizedBox(height: 16),
               PhysicsButton(
-                text: "OFFLINE MODE",
+                text: "MOSAIC DRAFT (LOCAL)",
                 color: tGold,
                 shadowColor: const Color(0xFFB59A53),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LocalPlayScreen())),
               ),
+              const SizedBox(height: 16),
+              PhysicsButton(
+                text: "GEM CRAFTER (PROTOTYPE)",
+                color: const Color(0xFF8E44AD),
+                shadowColor: const Color(0xFF5E2B73),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const merchant.GemCrafterScreen())),
+              ),
               
               const Spacer(),
-              const Text("v16.7 • Domain Driven Design", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
+              const Text("v17.0 • Domain Engine Live", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.black26, fontWeight: FontWeight.bold)),
             ],
           ),
         ),
