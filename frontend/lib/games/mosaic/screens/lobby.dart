@@ -28,7 +28,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
   @override
   void initState() {
     super.initState();
-    socketService.connect();
+    // V55 BUGFIX: Provide the required WebSocket URL argument to the connect method.
+    socketService.connect('wss://nolpan.onrender.com/ws');
+    
     _sub = socketService.stream.listen((msg) {
       if (msg['type'] == 'ROOM_UPDATE') {
         if (mounted) {
@@ -43,11 +45,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
       } else if (msg['type'] == 'GAME_STARTED') {
         if (mounted) {
           _sub.cancel();
-          // Routing to specific game type based on selected state
           if (_selectedGame == 'mosaic') {
             Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => GameScreen(initialState: msg['payload'])));
           } else {
-            // For now, redirect to the gem crafter prototype
             Navigator.pushReplacementNamed(context, '/merchant');
           }
         }
@@ -82,7 +82,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void _changeGame(String gameType) {
     if (_players.isNotEmpty && _players.first == socketService.playerName) {
       socketService.send('CHANGE_GAME', {'code': _roomCode, 'game': gameType});
-      // Optimistic update
       setState(() => _selectedGame = gameType);
     }
   }
@@ -133,7 +132,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
             const Text("NETWORK SETUP", textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: tInk)),
             const SizedBox(height: 24),
             
-            // iOS Style Segmented Control
             Container(
               height: 44,
               decoration: BoxDecoration(color: Colors.blueGrey[50], borderRadius: BorderRadius.circular(12)),
