@@ -20,10 +20,10 @@ class LocalPlayScreen extends StatefulWidget {
 class _LocalPlayScreenState extends State<LocalPlayScreen> {
   // LOBBY STATE
   bool _inLobby = true;
-  List<String> _localPlayers = []; // SPRINT 16.4: Zero Default Players
+  List<String> _localPlayers = [];
   bool _isAddingPlayer = false;
   final TextEditingController _nameCtrl = TextEditingController();
-  final FocusNode _nameFocusNode = FocusNode(); // SPRINT 16.4: Auto-Focus Keyboard
+  final FocusNode _nameFocusNode = FocusNode(); 
 
   final List<Color> _avatarColors = [tTeal, tTerra, tGold, tInk];
 
@@ -47,10 +47,34 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
   bool _showShatter = false;
 
   @override
+  void initState() {
+    super.initState();
+    // SPRINT 16.5: Auto-Save on Focus Loss (Tap outside)
+    _nameFocusNode.addListener(() {
+      if (!_nameFocusNode.hasFocus && _isAddingPlayer) {
+        _submitName();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _nameCtrl.dispose();
     _nameFocusNode.dispose();
     super.dispose();
+  }
+
+  // SPRINT 16.5: Reusable submit function
+  void _submitName() {
+    if (!mounted) return;
+    String val = _nameCtrl.text.trim();
+    setState(() {
+      if (val.isNotEmpty && _localPlayers.length < 4) {
+        _localPlayers.add(val);
+      }
+      _isAddingPlayer = false;
+      _nameCtrl.clear();
+    });
   }
 
   void _startLocalGame() {
@@ -107,7 +131,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     }
   }
 
-  // SPRINT 16.4: Added 1:1 Illegal Move Parity Check
   String? _getPlacementError(int rowIdx, String color, String player) {
     if (rowIdx == -1) return null;
     Map<String, dynamic> myBoard = _gameState['boards'][player] ?? {};
@@ -251,7 +274,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     for (String p in _localPlayers) {
       var board = _gameState['boards'][p];
       
-      // Positive Points
       for (int r = 0; r < 5; r++) {
         if (board['pattern_lines'][r].where((s) => s == "").isEmpty && board['pattern_lines'][r].isNotEmpty) {
           String color = board['pattern_lines'][r][0];
@@ -281,7 +303,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
         }
       }
 
-      // Penalties & -1 Token Setup
       List<int> pens = [-1, -1, -2, -2, -2, -3, -3];
       for (int i = 0; i < board['floor_line'].length; i++) {
         String t = board['floor_line'][i];
@@ -297,7 +318,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
         }
       }
 
-      // Clamp
       if (board['score'] < 0) board['score'] = 0;
       board['floor_line'] = [];
     }
@@ -518,6 +538,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
 
   Widget _buildLobby() {
     bool canStart = _localPlayers.length >= 2;
+
     return Center(
       child: Container(
         margin: const EdgeInsets.all(24), 
@@ -592,15 +613,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF8E44AD), width: 2)),
                                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF8E44AD), width: 2)),
                                 ),
-                                onSubmitted: (val) {
-                                  if (val.trim().isNotEmpty) {
-                                    setState(() { 
-                                      _localPlayers.add(val.trim()); 
-                                      _isAddingPlayer = false; 
-                                      _nameCtrl.clear(); 
-                                    });
-                                  }
-                                },
+                                onSubmitted: (_) => _submitName(),
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -617,8 +630,11 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                             GestureDetector(
                               onTap: () {
                                 setState(() => _isAddingPlayer = true);
-                                Future.delayed(const Duration(milliseconds: 50), () {
-                                  if (mounted) _nameFocusNode.requestFocus();
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  if (mounted) {
+                                    _nameFocusNode.requestFocus();
+                                    SystemChannels.textInput.invokeMethod('TextInput.show');
+                                  }
                                 });
                               },
                               child: Container(
@@ -718,7 +734,8 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
             const SizedBox(height: 16),
             PhysicsButton(text: "PLAY AGAIN", color: tTeal, shadowColor: const Color(0xFF1E7066), onTap: _startLocalGame),
             const SizedBox(height: 16),
-            PhysicsButton(text: "EXIT TO LOBBY", color: tTerra, shadowColor: const Color(0xFFB3563F), onTap: () => setState(() { _inLobby = true; _isReviewingBoard = false; _localPlayers.clear(); })),
+            // SPRINT 16.5: PRESERVED MEMORY (Removed _localPlayers.clear())
+            PhysicsButton(text: "EXIT TO LOBBY", color: tTerra, shadowColor: const Color(0xFFB3563F), onTap: () => setState(() { _inLobby = true; _isReviewingBoard = false; })),
           ]
         )
       )
@@ -774,7 +791,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                       if (_gameState['status'] == "GAME_OVER")
                         const Text("REVIEWING BOARDS", style: TextStyle(color: tInk, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 2))
                       else
-                        // SPRINT 16.4: Removed Transition Animation
                         Text(
                           "CURRENT TURN: ${_turnPlayer.toUpperCase()}", 
                           style: TextStyle(
@@ -926,7 +942,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: List.generate(_gameState['factories'].length, (kIdx) {
-                            // SPRINT 16.4: Sort Factory Tiles by Color
                             List<String> fTiles = List<String>.from(_gameState['factories'][kIdx]);
                             fTiles.sort();
                             
@@ -979,7 +994,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                           child: (_gameState['center'] as List).isEmpty 
                               ? const Text("CENTER POOL", style: TextStyle(fontSize: 10, color: Colors.grey)) 
                               : Builder(builder: (context) {
-                                  // SPRINT 16.4: Sort Center Pool by Color
                                   List<String> sortedCenter = List<String>.from(_gameState['center']);
                                   sortedCenter.sort((a, b) {
                                     if (a == "first_player") return -1;
@@ -1041,7 +1055,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: List.generate(5, (rIdx) {
-                                    // SPRINT 16.4: Strict Edge Case Blocking
                                     String? errorMsg = heldColor != null ? _getPlacementError(rIdx, heldColor!, _turnPlayer) : null;
                                     bool isLegal = heldColor != null && canPick && errorMsg == null;
                                     
