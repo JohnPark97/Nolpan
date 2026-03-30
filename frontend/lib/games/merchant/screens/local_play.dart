@@ -239,10 +239,13 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
       if (!fromDeck) {
         int idx = _market.indexOf(card);
         if (idx != -1) {
+          // V66 BUGFIX: Strict Enum Mapping for random generation
           _market[idx] = MarketCard(
-            id: math.Random().nextInt(1000), tier: card.tier, points: card.tier, 
-            provides: GemPalette.stdGems[math.Random().nextInt(5)], 
-            costs: {GemPalette.stdGems[math.Random().nextInt(5)]: card.tier + 1}
+            id: math.Random().nextInt(1000), 
+            tier: card.tier, 
+            points: card.tier, 
+            provides: GemType.values[math.Random().nextInt(5)], 
+            costs: {GemType.values[math.Random().nextInt(5)]: card.tier + 1}
           );
         }
       }
@@ -293,9 +296,13 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
 
     int cardIndex = _market.indexOf(card);
     if (cardIndex != -1) {
+      // V66 BUGFIX: Strict Enum Mapping for random generation
       _market[cardIndex] = MarketCard(
-        id: math.Random().nextInt(1000), tier: card.tier, points: 0, 
-        provides: GemType.emerald, costs: {GemType.sapphire: 1, GemType.yellow: 1}
+        id: math.Random().nextInt(1000), 
+        tier: card.tier, 
+        points: 0, 
+        provides: GemType.values[math.Random().nextInt(5)], 
+        costs: {GemType.values[math.Random().nextInt(5)]: 1}
       );
     }
 
