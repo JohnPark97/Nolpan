@@ -14,6 +14,7 @@ class LobbyScreen extends StatefulWidget {
 class _LobbyScreenState extends State<LobbyScreen> {
   // CONNECTION STATE
   bool _isJoined = false;
+  bool _isCreateMode = true; // SPRINT 18.4: Restored segmented toggle state
   
   // LOBBY DATA
   String _roomCode = "";
@@ -27,14 +28,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
   @override
   void initState() {
     super.initState();
-    // V61 BUGFIX: Hardcode Render URL to satisfy the dart2js compiler requirement
     socketService.connect('wss://nolpan.onrender.com/ws');
     
-    // Dynamic text listener for the Action Button
-    _codeCtrl.addListener(() {
-      setState(() {});
-    });
-
     _sub = socketService.stream.listen((msg) {
       if (msg['type'] == 'ROOM_UPDATE') {
         if (mounted) {
@@ -73,24 +68,22 @@ class _LobbyScreenState extends State<LobbyScreen> {
     if (name.isEmpty) return;
     
     socketService.playerName = name;
-    String code = _codeCtrl.text.trim().toUpperCase();
-
-    // V61 QoL: Optimistic UI Transition
-    // This allows the user to immediately jump into the "Waiting Room" UI
-    // while the free-tier Render server takes 30-50 seconds to wake up from sleep.
-    setState(() {
-      _isJoined = true;
-      if (code.isNotEmpty) {
-        _roomCode = code;
-      } else {
-        _roomCode = "BOOTING...";
-      }
-      _players = [name]; // Optimistically show our own avatar
-    });
     
-    if (code.isEmpty) {
+    if (_isCreateMode) {
+      setState(() {
+        _isJoined = true;
+        _roomCode = "BOOTING...";
+        _players = [name];
+      });
       socketService.send('CREATE_ROOM', {'name': name});
     } else {
+      String code = _codeCtrl.text.trim().toUpperCase();
+      if (code.isEmpty) return;
+      setState(() {
+        _isJoined = true;
+        _roomCode = code;
+        _players = [name];
+      });
       socketService.send('JOIN_ROOM', {'name': name, 'code': code});
     }
   }
@@ -110,30 +103,26 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   Widget _buildTopBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () {
-              FocusScope.of(context).unfocus();
-              Navigator.pop(context);
-            },
-            child: const Row(
-              children: [
-                Icon(Icons.arrow_back, color: Colors.blueGrey, size: 16),
-                SizedBox(width: 4),
-                Text("BACK", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey, letterSpacing: 1.5))
-              ],
-            ),
-          )
-        ],
+      padding: const EdgeInsets.only(left: 24, top: 24),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          FocusScope.of(context).unfocus();
+          Navigator.pop(context);
+        },
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.arrow_back, color: Colors.blueGrey[400], size: 14),
+            const SizedBox(width: 4),
+            Text("BACK", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[400], letterSpacing: 1.5))
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildEntryState() {
-    String dynamicButtonText = _codeCtrl.text.trim().isEmpty ? "CREATE ROOM" : "JOIN ROOM";
-
     return Center(
       child: Container(
         margin: const EdgeInsets.all(24), 
@@ -148,44 +137,84 @@ class _LobbyScreenState extends State<LobbyScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text("NETWORK SETUP", textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: tInk)),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             
+            // SPRINT 18.4: Restored Segmented Toggle
+            Container(
+              height: 44,
+              decoration: BoxDecoration(color: Colors.blueGrey[50], borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _isCreateMode = true),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: _isCreateMode ? Colors.white : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: _isCreateMode ? [const BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0,1))] : []
+                        ),
+                        child: Center(child: Text("CREATE ROOM", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _isCreateMode ? tTeal : Colors.blueGrey[400]))),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _isCreateMode = false),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: !_isCreateMode ? Colors.white : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: !_isCreateMode ? [const BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0,1))] : []
+                        ),
+                        child: Center(child: Text("JOIN ROOM", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: !_isCreateMode ? tTeal : Colors.blueGrey[400]))),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // SPRINT 18.4: Arcade-styled Text Inputs
             TextField(
               controller: _nameCtrl,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tInk),
               decoration: InputDecoration(
-                hintText: "Your Name",
-                hintStyle: TextStyle(color: Colors.blueGrey[300]),
+                hintText: "Your Name (e.g. Boss)",
+                hintStyle: TextStyle(color: Colors.blueGrey[300], fontWeight: FontWeight.bold),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: Colors.blueGrey[50],
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!, width: 2)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!, width: 2)),
                 focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: tTeal, width: 2)),
               ),
             ),
             
-            const SizedBox(height: 12),
-            
-            TextField(
-              controller: _codeCtrl,
-              textCapitalization: TextCapitalization.characters,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tInk),
-              decoration: InputDecoration(
-                hintText: "Room Code (Optional)",
-                hintStyle: TextStyle(color: Colors.blueGrey[300]),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: tTeal, width: 2)),
+            if (!_isCreateMode) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _codeCtrl,
+                textCapitalization: TextCapitalization.characters,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: tInk),
+                decoration: InputDecoration(
+                  hintText: "4-Digit Code",
+                  hintStyle: TextStyle(color: Colors.blueGrey[300], fontWeight: FontWeight.bold),
+                  filled: true,
+                  fillColor: Colors.blueGrey[50],
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!, width: 2)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.blueGrey[200]!, width: 2)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: tTeal, width: 2)),
+                ),
               ),
-            ),
+            ],
 
             const SizedBox(height: 32),
             PhysicsButton(
-              text: dynamicButtonText, 
+              text: _isCreateMode ? "HOST MATCH" : "CONNECT", 
               color: tTeal, 
               shadowColor: const Color(0xFF1E7066),
               onTap: _handleConnect
@@ -386,13 +415,19 @@ class _LobbyScreenState extends State<LobbyScreen> {
     return Scaffold(
       backgroundColor: tBg,
       body: SafeArea(
-        child: Stack(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (!_isJoined) _buildTopBar(),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: ScaleTransition(scale: Tween<double>(begin: 0.95, end: 1.0).animate(animation), child: child)),
-              child: _isJoined ? _buildWaitingRoomState() : _buildEntryState()
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation, 
+                  child: ScaleTransition(scale: Tween<double>(begin: 0.95, end: 1.0).animate(animation), child: child)
+                ),
+                child: _isJoined ? _buildWaitingRoomState() : _buildEntryState()
+              ),
             ),
           ],
         ),
