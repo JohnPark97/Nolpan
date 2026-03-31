@@ -82,7 +82,7 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
 
   Map<GemType, int> _bank = {
     GemType.emerald: 5, GemType.amethyst: 5, GemType.yellow: 5,
-    GemType.ruby: 5, GemType.sapphire: 3, GemType.gold: 5 // Sapphire starts at 3 for Unit Test
+    GemType.ruby: 5, GemType.sapphire: 5, GemType.gold: 5
   };
 
   List<MarketCard> _market = [];
@@ -98,32 +98,15 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   }
 
   void _initializeTests() {
-    // Player 1 (Jahn)
+    // V25 FIX: Initialize clean player states with NO dummy data
     PlayerState p1 = PlayerState("Jahn", "J");
-    p1.engine[GemType.ruby] = 2;
-    p1.wallet[GemType.ruby] = 1;
-    // Unit Test: 9 total tokens (Drafting forces Discard State)
-    p1.wallet[GemType.emerald] = 3;
-    p1.wallet[GemType.yellow] = 3;
-    p1.wallet[GemType.amethyst] = 2; 
-
-    // Player 2 (Bee)
     PlayerState p2 = PlayerState("Bee", "B");
-    p2.wallet[GemType.gold] = 2; 
-    // Unit Test: Max Reserved Cards
-    p2.reservedCards = [
-      const MarketCard(id: 101, tier: 1, points: 0, provides: GemType.emerald, costs: {}),
-      const MarketCard(id: 102, tier: 1, points: 0, provides: GemType.ruby, costs: {}),
-      const MarketCard(id: 103, tier: 2, points: 1, provides: GemType.sapphire, costs: {}),
-    ];
 
     _players = [p1, p2];
 
-    MarketCard testCard1 = const MarketCard(id: 1, tier: 1, points: 2, provides: GemType.sapphire, costs: {GemType.ruby: 3});
-    MarketCard testCard2 = const MarketCard(id: 2, tier: 1, points: 0, provides: GemType.ruby, costs: {GemType.emerald: 2});
-
     _market = [
-      testCard1, testCard2,
+      const MarketCard(id: 1, tier: 1, points: 2, provides: GemType.sapphire, costs: {GemType.ruby: 3}),
+      const MarketCard(id: 2, tier: 1, points: 0, provides: GemType.ruby, costs: {GemType.emerald: 2}),
       const MarketCard(id: 3, tier: 1, points: 0, provides: GemType.emerald, costs: {GemType.sapphire: 1, GemType.amethyst: 2}),
       const MarketCard(id: 4, tier: 1, points: 0, provides: GemType.amethyst, costs: {GemType.yellow: 2, GemType.ruby: 2}),
       const MarketCard(id: 5, tier: 2, points: 2, provides: GemType.yellow, costs: {GemType.emerald: 4, GemType.sapphire: 2}),
@@ -239,7 +222,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
       if (!fromDeck) {
         int idx = _market.indexOf(card);
         if (idx != -1) {
-          // V66 BUGFIX: Strict Enum Mapping for random generation
           _market[idx] = MarketCard(
             id: math.Random().nextInt(1000), 
             tier: card.tier, 
@@ -296,7 +278,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
 
     int cardIndex = _market.indexOf(card);
     if (cardIndex != -1) {
-      // V66 BUGFIX: Strict Enum Mapping for random generation
       _market[cardIndex] = MarketCard(
         id: math.Random().nextInt(1000), 
         tier: card.tier, 
@@ -369,6 +350,7 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
           ),
           const SizedBox(height: 6),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start, // V25 FIX: Prevent stretching
             children: opponents.map((opp) => Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(right: 6.0),
@@ -610,9 +592,15 @@ class OpponentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blueGrey[200]!)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(10), 
+        border: Border.all(color: Colors.blueGrey[200]!),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min, // V25 FIX: Hug content to remove gaps
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
@@ -620,42 +608,42 @@ class OpponentCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  CircleAvatar(radius: 8, backgroundColor: const Color(0xFF2A9D8F), child: Text(player.avatar, style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
-                  const SizedBox(width: 4),
-                  Text(player.name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+                  CircleAvatar(radius: 10, backgroundColor: const Color(0xFF2A9D8F), child: Text(player.avatar, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))),
+                  const SizedBox(width: 6),
+                  Text(player.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
                 ],
               ),
-              Text(player.score.toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF2A9D8F))),
+              Text(player.score.toString(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF2A9D8F))),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               ...[GemType.emerald, GemType.amethyst, GemType.yellow, GemType.ruby, GemType.sapphire].map((g) {
                 int c = player.engine[g] ?? 0;
                 return Container(
-                  width: 12, height: 12,
-                  decoration: BoxDecoration(color: g.color.withOpacity(c > 0 ? 1.0 : 0.2), borderRadius: BorderRadius.circular(2)),
-                  child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 7, color: Colors.white, fontWeight: FontWeight.bold))),
+                  width: 14, height: 14,
+                  decoration: BoxDecoration(color: g.color.withOpacity(c > 0 ? 1.0 : 0.15), borderRadius: BorderRadius.circular(3)),
+                  child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
                 );
               }),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
             ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: GemType.values.map((g) {
               int c = player.wallet[g] ?? 0;
               return Container(
-                width: 12, height: 12,
+                width: 14, height: 14,
                 decoration: BoxDecoration(
-                  color: g.gradient == null ? g.color.withOpacity(c > 0 ? 1.0 : 0.2) : null,
+                  color: g.gradient == null ? g.color.withOpacity(c > 0 ? 1.0 : 0.15) : null,
                   gradient: g.gradient != null && c > 0 ? g.gradient : null,
                   shape: BoxShape.circle,
                 ),
-                child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 6, color: Colors.white, fontWeight: FontWeight.bold))),
+                child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
               );
             }).toList(),
           ),
