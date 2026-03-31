@@ -40,8 +40,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.mu.Lock()
 				delete(room.Clients, ws)
 				
-                // V66 BUGFIX: Only wipe from Player array if game hasn't started!
-                // This preserves the turn-math state if a player drops out mid-game.
                 if room.State == nil {
 				    var newPlayers []string
 				    for _, p := range room.Players { if p != currentName { newPlayers = append(newPlayers, p) } }
@@ -86,7 +84,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				currentRoomCode = p.Code; currentName = p.Name
 				room.Clients[ws] = p.Name
                 
-                // V66 BUGFIX: Ensure reconnected players are in the slice
                 inPlayers := false
                 for _, name := range room.Players {
                     if name == p.Name { inPlayers = true; break }
@@ -120,7 +117,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room.Clients[ws] = p.Name
 				broadcastRoom(room)
 			} else {
-                // V66: Auto-Create custom room codes!
                 currentRoomCode = p.Code; currentName = p.Name
                 rooms[p.Code] = &Room{Code: p.Code, Players: []string{p.Name}, Clients: make(map[*websocket.Conn]string), GameType: "mosaic"}
                 rooms[p.Code].Clients[ws] = p.Name
@@ -154,6 +150,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			if room, ok := rooms[p.Code]; ok {
 				room.State = nil 
 				broadcastRoom(room)
+                broadcastMessage(room, "RETURN_TO_LOBBY", nil)
 			}
 		}
 
@@ -163,7 +160,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			if room, ok := rooms[p.Code]; ok && room.State != nil {
                 state := room.State
                 bag := make([]string, 0, 100)
-                colors := []string{"blue", "yellow", "red", "black", "purple"}
+                colors := []string{"blue", "yellow", "red", "black", "amethyst"} // Synchronized with V23
                 for _, c := range colors {
                     for i := 0; i < 20; i++ { bag = append(bag, c) }
                 }

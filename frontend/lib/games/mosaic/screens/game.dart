@@ -46,8 +46,12 @@ class _GameScreenState extends State<GameScreen> {
     super.initState();
     _gameState = widget.initialState;
     _sub = socketService.stream.listen((msg) {
-      if (msg['type'] == 'GAME_UPDATE' || msg['type'] == 'GAME_OVER') {
-        if (mounted) setState(() { _gameState = msg['payload']; _showShatter = false; });
+      if (msg['type'] == 'GAME_UPDATE' || msg['type'] == 'GAME_OVER' || msg['type'] == 'GAME_STARTED') {
+        if (mounted) setState(() { 
+          _gameState = msg['payload']; 
+          _showShatter = false; 
+          _isReviewingBoard = false; 
+        });
       } else if (msg['type'] == 'RETURN_TO_LOBBY') {
         if (mounted) Navigator.pushReplacementNamed(context, '/');
       }
@@ -418,7 +422,7 @@ class _GameScreenState extends State<GameScreen> {
                                           crossAxisAlignment: CrossAxisAlignment.end, 
                                           children: List.generate(5, (r) {
                                             return Row(
-                                              mainAxisAlignment: MainAxisAlignment.end, // MANDATORY: Right-to-Left Alignment
+                                              mainAxisAlignment: MainAxisAlignment.end,
                                               children: List.generate(5, (cIdx) {
                                                 if (cIdx < 4 - r) return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4); 
                                                 int filled = ((oppPattern.length > r) ? oppPattern[r] as List : []).where((s) => s != "").length;
@@ -463,10 +467,7 @@ class _GameScreenState extends State<GameScreen> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: List.generate(7, (i) {
                                     String t = i < oppFloor.length ? oppFloor[i] : "";
-                                    return Container(
-                                      margin: const EdgeInsets.symmetric(horizontal: 2), width: 14, height: 14, 
-                                      decoration: BoxDecoration(color: t != "" ? _getBaseColor(t) : Colors.grey[200], borderRadius: BorderRadius.circular(2))
-                                    );
+                                    return _buildTile(t, size: 14, empty: t == "");
                                   })
                                 )
                               ],
