@@ -28,7 +28,7 @@ type GameState struct {
 
 func generateInitialState(players []string) *GameState {
     bag := make([]string, 0, 100)
-	colors := []string{"blue", "yellow", "red", "black", "purple"}
+	colors := []string{"blue", "yellow", "red", "black", "amethyst"}
     for _, c := range colors {
         for i := 0; i < 20; i++ { bag = append(bag, c) }
     }
@@ -84,11 +84,11 @@ func drawTiles(state *GameState, count int) []string {
 
 func scoreRound(state *GameState, playerOrder []string) {
 	wallPattern := [][]string{
-		{"blue", "yellow", "red", "black", "purple"},
-		{"purple", "blue", "yellow", "red", "black"},
-		{"black", "purple", "blue", "yellow", "red"},
-		{"red", "black", "purple", "blue", "yellow"},
-		{"yellow", "red", "black", "purple", "blue"},
+		{"blue", "yellow", "red", "black", "amethyst"},
+		{"amethyst", "blue", "yellow", "red", "black"},
+		{"black", "amethyst", "blue", "yellow", "red"},
+		{"red", "black", "amethyst", "blue", "yellow"},
+		{"yellow", "red", "black", "amethyst", "blue"},
 	}
 	penalties := []int{-1, -1, -2, -2, -2, -3, -3}
 	
@@ -173,7 +173,7 @@ func scoreRound(state *GameState, playerOrder []string) {
                 for r := 0; r < 5; r++ { if b.Wall[r][c] == "" { comp = false; break } }
                 if comp { b.Score += 7 }
             }
-            colors := []string{"blue", "yellow", "red", "black", "purple"}
+            colors := []string{"blue", "yellow", "red", "black", "amethyst"}
             for _, color := range colors {
                 count := 0
                 for r := 0; r < 5; r++ {

@@ -71,7 +71,6 @@ class _GameScreenState extends State<GameScreen> {
     GlobalKey sourceKey = kIdx == -1 ? centerKey : factoryKeys[kIdx];
     GlobalKey destKey = targetRow == -1 ? floorKey : patternRowKeys[targetRow];
     
-    // Play local animation immediately for responsive feel
     _playDraftingFlight(sourceKey, destKey, cColor, cCount);
 
     setState(() { 
@@ -244,7 +243,6 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Widget _buildGameOverScreen() {
-    // V67 BUGFIX: Correctly cast the dynamic map keys to a List of Strings
     List<String> ranked = List<String>.from((_gameState['boards'] as Map).keys);
     ranked.sort((a, b) => (_gameState['boards'][b]['score'] as int).compareTo(_gameState['boards'][a]['score'] as int));
     
@@ -302,12 +300,10 @@ class _GameScreenState extends State<GameScreen> {
       return Scaffold(backgroundColor: tBg, body: SafeArea(child: _buildGameOverScreen()));
     }
 
-    // V67 BUGFIX: Add coalesce fallback to prevent nullable String crash
     String myName = socketService.playerName ?? "";
     String turnPlayer = _gameState['turn_player'] ?? "";
     bool canPick = turnPlayer == myName && _gameState['status'] != "GAME_OVER";
 
-    // V67 BUGFIX: Correctly map and convert keys to Strings before casting to list
     List<String> opponents = (_gameState['boards'] as Map).keys.where((p) => p != myName).map((e) => e.toString()).toList();
     
     Map<String, dynamic> myBoard = _gameState['boards'][myName] ?? {};
@@ -337,7 +333,6 @@ class _GameScreenState extends State<GameScreen> {
               ),
             Column(
               children: [
-                // Top Bar
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
@@ -347,7 +342,7 @@ class _GameScreenState extends State<GameScreen> {
                         const Text("REVIEWING BOARDS", style: TextStyle(color: tInk, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 2))
                       else
                         Text(
-                          turnPlayer == myName ? "YOUR TURN" : "OPPONENT'S TURN: ${turnPlayer.toUpperCase()}", 
+                          turnPlayer == myName ? "YOUR TURN" : "OPPONENT: ${turnPlayer.toUpperCase()}", 
                           style: TextStyle(
                             color: turnPlayer == myName ? tTeal : tTerra, 
                             fontWeight: FontWeight.w900, 
@@ -364,13 +359,10 @@ class _GameScreenState extends State<GameScreen> {
                             child: const Text("RESULTS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
                           )
                         )
-                      else
-                        IconButton(icon: const Icon(Icons.settings, color: Colors.transparent, size: 24), onPressed: null)
                     ]
                   ),
                 ),
 
-                // Opponents
                 Expanded(
                   flex: 22, 
                   child: Container(
@@ -426,7 +418,7 @@ class _GameScreenState extends State<GameScreen> {
                                           crossAxisAlignment: CrossAxisAlignment.end, 
                                           children: List.generate(5, (r) {
                                             return Row(
-                                              mainAxisAlignment: MainAxisAlignment.end, 
+                                              mainAxisAlignment: MainAxisAlignment.end, // MANDATORY: Right-to-Left Alignment
                                               children: List.generate(5, (cIdx) {
                                                 if (cIdx < 4 - r) return Container(margin: const EdgeInsets.all(0.5), width: 4, height: 4); 
                                                 int filled = ((oppPattern.length > r) ? oppPattern[r] as List : []).where((s) => s != "").length;
@@ -486,7 +478,6 @@ class _GameScreenState extends State<GameScreen> {
                   )
                 ),
 
-                // Center/Factories
                 Expanded(
                   flex: 33, 
                   child: Column(
@@ -499,7 +490,6 @@ class _GameScreenState extends State<GameScreen> {
                           children: List.generate(_gameState['factories'].length, (kIdx) {
                             List<String> fTiles = List<String>.from(_gameState['factories'][kIdx]);
                             fTiles.sort();
-                            
                             return Opacity(
                               opacity: fTiles.isEmpty || !canPick ? 0.2 : 1.0,
                               child: Container(
@@ -511,20 +501,15 @@ class _GameScreenState extends State<GameScreen> {
                                     spacing: 2, runSpacing: 2, 
                                     children: fTiles.map((c) {
                                       bool isHeldLocally = heldColor == c && heldKilnIdx == kIdx;
-                                      bool dim = heldKilnIdx == kIdx && !isHeldLocally;
                                       return GestureDetector(
                                         onTap: !canPick ? null : () { 
-                                          setState(() { 
-                                            heldColor = c; 
-                                            heldKilnIdx = kIdx; 
-                                            heldCount = fTiles.where((t) => t == c).length; 
-                                          }); 
+                                          setState(() { heldColor = c; heldKilnIdx = kIdx; heldCount = fTiles.where((t) => t == c).length; }); 
                                           HapticFeedback.selectionClick();
                                         },
                                         child: AnimatedContainer(
-                                          duration: const Duration(milliseconds: 150), curve: Curves.easeOutBack,
+                                          duration: const Duration(milliseconds: 150),
                                           transform: isHeldLocally ? Matrix4.translationValues(0, -6.0, 0) : Matrix4.identity(),
-                                          child: _buildTile(c, size: 18, opacity: dim ? 0.3 : 1.0, scale: isHeldLocally ? 1.1 : 1.0)
+                                          child: _buildTile(c, size: 18)
                                         ),
                                       );
                                     }).toList()
@@ -540,54 +525,36 @@ class _GameScreenState extends State<GameScreen> {
                         key: centerKey, 
                         constraints: const BoxConstraints(minHeight: 64), 
                         width: double.infinity, margin: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE5E0D8), 
-                          borderRadius: BorderRadius.circular(12), 
-                          border: const Border(top: BorderSide(color: Colors.black12, width: 2))
-                        ), 
+                        decoration: BoxDecoration(color: const Color(0xFFE5E0D8), borderRadius: BorderRadius.circular(12)), 
                         child: Center(
                           child: (_gameState['center'] as List).isEmpty 
                               ? const Text("CENTER POOL", style: TextStyle(fontSize: 10, color: Colors.grey)) 
-                              : Builder(builder: (context) {
-                                  List<String> sortedCenter = List<String>.from(_gameState['center']);
-                                  sortedCenter.sort((a, b) {
-                                    if (a == "first_player") return -1;
-                                    if (b == "first_player") return 1;
-                                    return a.compareTo(b);
-                                  });
-                                  
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    child: Wrap(
-                                      spacing: 4, runSpacing: 4, 
-                                      children: sortedCenter.map((c) {
-                                        bool isHeldLocally = heldColor == c && heldKilnIdx == -1;
-                                        return GestureDetector(
-                                          onTap: (c == "first_player" || !canPick) ? null : () { 
-                                            setState(() { 
-                                              heldColor = c; 
-                                              heldKilnIdx = -1; 
-                                              heldCount = sortedCenter.where((t) => t == c).length; 
-                                            }); 
-                                            HapticFeedback.selectionClick();
-                                          },
-                                          child: AnimatedContainer(
-                                            duration: const Duration(milliseconds: 150), curve: Curves.easeOutBack,
-                                            transform: isHeldLocally ? Matrix4.translationValues(0, -4.0, 0) : Matrix4.identity(),
-                                            child: _buildTile(c, size: 22, scale: isHeldLocally ? 1.1 : 1.0)
-                                          )
-                                        );
-                                      }).toList()
-                                    ),
-                                  );
-                                })
+                              : Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  child: Wrap(
+                                    spacing: 4, runSpacing: 4, 
+                                    children: List<String>.from(_gameState['center']).map((c) {
+                                      bool isHeldLocally = heldColor == c && heldKilnIdx == -1;
+                                      return GestureDetector(
+                                        onTap: (c == "first_player" || !canPick) ? null : () { 
+                                          setState(() { heldColor = c; heldKilnIdx = -1; heldCount = (List<String>.from(_gameState['center'])).where((t) => t == c).length; }); 
+                                          HapticFeedback.selectionClick();
+                                        },
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 150),
+                                          transform: isHeldLocally ? Matrix4.translationValues(0, -4.0, 0) : Matrix4.identity(),
+                                          child: _buildTile(c, size: 22)
+                                        )
+                                      );
+                                    }).toList()
+                                  ),
+                                )
                         ),
                       )
                     ],
                   )
                 ),
 
-                // My Workshop
                 Expanded(
                   flex: 45, 
                   child: Container(
@@ -612,16 +579,12 @@ class _GameScreenState extends State<GameScreen> {
                                   children: List.generate(5, (rIdx) {
                                     String? errorMsg = heldColor != null ? _getPlacementError(rIdx, heldColor!, myName) : null;
                                     bool isLegal = heldColor != null && canPick && errorMsg == null;
-                                    
                                     return GestureDetector(
                                       onTap: heldColor != null && canPick ? () {
-                                        if (isLegal) {
-                                          _commitTurn(rIdx);
-                                        } else {
+                                        if (isLegal) _commitTurn(rIdx);
+                                        else {
                                           HapticFeedback.vibrate();
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text(errorMsg!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: tTerra, duration: const Duration(seconds: 2))
-                                          );
+                                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: tTerra));
                                         }
                                       } : null,
                                       onPanUpdate: (_) => setState(() => hoveredRow = rIdx),
@@ -635,26 +598,14 @@ class _GameScreenState extends State<GameScreen> {
                                             String rowColor = filled > 0 ? (patternLines[rIdx] as List).firstWhere((s) => s.toString().isNotEmpty).toString() : "";
                                             int emptyCount = (rIdx + 1) - filled;
                                             int ghostStart = emptyCount;
-                                            if (hoveredRow == rIdx && isLegal && heldCount != null) {
-                                              ghostStart = math.max(0, emptyCount - heldCount!);
-                                            }
+                                            if (hoveredRow == rIdx && isLegal && heldCount != null) ghostStart = math.max(0, emptyCount - heldCount!);
 
                                             Widget tileW;
-                                            if (slotIdx < ghostStart) {
-                                              tileW = _buildTile("", size: 24, empty: true);
-                                            } else if (slotIdx >= ghostStart && slotIdx < emptyCount) {
-                                              tileW = _buildTile(heldColor!, size: 24, isGhost: true);
-                                            } else {
-                                              tileW = _buildTile(rowColor, size: 24);
-                                            }
+                                            if (slotIdx < ghostStart) tileW = _buildTile("", size: 24, empty: true);
+                                            else if (slotIdx >= ghostStart && slotIdx < emptyCount) tileW = _buildTile(heldColor!, size: 24, isGhost: true);
+                                            else tileW = _buildTile(rowColor, size: 24);
 
-                                            if (_showShatter) {
-                                              tileW = AnimatedScale(
-                                                scale: 0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInBack, 
-                                                child: AnimatedOpacity(opacity: 0.0, duration: const Duration(milliseconds: 400), child: tileW)
-                                              );
-                                            }
-                                            return SizedBox(width: 27, height: 27, child: Stack(alignment: Alignment.center, children: [Positioned(child: tileW)]));
+                                            return SizedBox(width: 27, height: 27, child: Center(child: tileW));
                                           }),
                                         ),
                                       ),
@@ -671,15 +622,10 @@ class _GameScreenState extends State<GameScreen> {
                                           String t = (wall.length > rIdx && wall[rIdx].length > cIdx) ? wall[rIdx][cIdx] : "";
                                           return SizedBox(
                                             key: wallKeys[rIdx][cIdx], width: 27, height: 27, 
-                                            child: Stack(
-                                              alignment: Alignment.center, 
-                                              children: [
-                                                Positioned(
-                                                  child: t != "" 
-                                                    ? _buildTile(t, size: 24) 
-                                                    : _buildTile(wallPattern[rIdx][cIdx], size: 24, isGhost: true)
-                                                )
-                                              ]
+                                            child: Center(
+                                                child: t != "" 
+                                                  ? _buildTile(t, size: 24) 
+                                                  : _buildTile(wallPattern[rIdx][cIdx], size: 24, opacity: 0.1)
                                             )
                                           );
                                         }),
@@ -699,30 +645,18 @@ class _GameScreenState extends State<GameScreen> {
                           child: Container(
                             key: floorKey, 
                             padding: const EdgeInsets.all(4), 
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8), 
-                              border: Border.all(color: hoveredRow == -1 ? tTeal : Colors.transparent, width: 2)
-                            ),
+                            decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: hoveredRow == -1 ? tTeal : Colors.transparent, width: 2)),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: List.generate(7, (i) {
                                 String t = i < floor.length ? floor[i] : "";
-                                if (hoveredRow == -1 && heldColor != null && heldCount != null && i >= floor.length && i < floor.length + heldCount!) {
-                                  t = heldColor!;
-                                }
-                                Widget tileW = _buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor);
-                                if (_showShatter && t != "") {
-                                  tileW = AnimatedScale(
-                                    scale: 0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInBack, 
-                                    child: AnimatedOpacity(opacity: 0.0, duration: const Duration(milliseconds: 400), child: tileW)
-                                  );
-                                }
+                                if (hoveredRow == -1 && heldColor != null && heldCount != null && i >= floor.length && i < floor.length + heldCount!) t = heldColor!;
                                 return Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 4), 
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min, 
                                     children: [
-                                      SizedBox(width: 27, height: 27, child: Stack(alignment: Alignment.center, children:[Positioned(child: tileW)])), 
+                                      SizedBox(width: 27, height: 27, child: Center(child: _buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor))), 
                                       const SizedBox(height: 4), 
                                       Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))
                                     ]
