@@ -19,7 +19,6 @@ class _MerchantLobbyScreenState extends State<MerchantLobbyScreen> {
   @override
   void initState() {
     super.initState();
-    // V30 FIX: Auto-focus the input immediately on mount
     Future.delayed(const Duration(milliseconds: 100), () => _focusNode.requestFocus());
   }
 
@@ -35,7 +34,6 @@ class _MerchantLobbyScreenState extends State<MerchantLobbyScreen> {
       setState(() { _players.add(name.trim()); });
       _nameCtrl.clear();
     }
-    // V30 FIX: Continuous Focus (Keep Keyboard Open)
     _focusNode.requestFocus();
   }
 
@@ -79,7 +77,7 @@ class _MerchantLobbyScreenState extends State<MerchantLobbyScreen> {
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  border: OutlineBinding(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none), // FIXED HERE
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF2A9D8F), width: 2)),
                   suffixIcon: IconButton(
@@ -276,7 +274,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
        _players.add(PlayerState(names[i], names[i].isNotEmpty ? names[i][0].toUpperCase() : "?", aColors[i % aColors.length]));
     }
 
-    // V30 FIX: Dynamic Board Setup based on player count
     int tokenCount = names.length == 4 ? 7 : (names.length == 3 ? 5 : 4);
     _bank = {
       GemType.emerald: tokenCount,
@@ -284,7 +281,7 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
       GemType.yellow: tokenCount,
       GemType.ruby: tokenCount,
       GemType.sapphire: tokenCount,
-      GemType.gold: 5, // Gold is always 5
+      GemType.gold: 5,
     };
 
     _deckTier1 = _generateDeck(1, [
@@ -898,7 +895,7 @@ Widget _buildGemIcon(GemType gem, double size, {Color? color}) {
 
 class OpponentCard extends StatelessWidget {
   final PlayerState player;
-  final int opponentCount; // V30 FIX: Adaptive awareness
+  final int opponentCount; 
 
   const OpponentCard({super.key, required this.player, required this.opponentCount});
 
@@ -939,7 +936,6 @@ class OpponentCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          // Strict 6-column alignment layout (Guaranteed not to wrap due to FittedBox)
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Row(
