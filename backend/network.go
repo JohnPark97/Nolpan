@@ -113,7 +113,16 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			json.Unmarshal(msg.Payload, &p)
 			if room, exists := rooms[p.Code]; exists {
 				currentRoomCode = p.Code; currentName = p.Name
-				room.Players = append(room.Players, p.Name)
+				
+                // V32 FIX: Prevent duplicate player entries blocking turn logic
+                inPlayers := false
+                for _, name := range room.Players {
+                    if name == p.Name { inPlayers = true; break }
+                }
+                if !inPlayers {
+                    room.Players = append(room.Players, p.Name)
+                }
+
 				room.Clients[ws] = p.Name
 				broadcastRoom(room)
 			} else {
@@ -160,7 +169,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			if room, ok := rooms[p.Code]; ok && room.State != nil {
                 state := room.State
                 bag := make([]string, 0, 100)
-                colors := []string{"blue", "yellow", "red", "black", "amethyst"} // Synchronized with V23
+                colors := []string{"blue", "yellow", "red", "black", "amethyst"}
                 for _, c := range colors {
                     for i := 0; i < 20; i++ { bag = append(bag, c) }
                 }
