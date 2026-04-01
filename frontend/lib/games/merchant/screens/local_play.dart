@@ -2,158 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../../../core/ui/physics_button.dart';
 
-// --- 0. ROUTING SAFEGUARDS ---
-
-// V33 FIX: If main.dart imports MerchantLobbyScreen, it safely proxies to the real Lobby.
-class MerchantLobbyScreen extends StatelessWidget {
-  const MerchantLobbyScreen({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return const GemCrafterScreen();
-  }
-}
-
-// --- 1. LOBBY SCREEN (ENTRY POINT) ---
-
-// V33 FIX: Renamed to GemCrafterScreen so main.dart hits the Lobby natively.
-class GemCrafterScreen extends StatefulWidget {
-  const GemCrafterScreen({super.key});
-
-  @override
-  State<GemCrafterScreen> createState() => _GemCrafterScreenState();
-}
-
-class _GemCrafterScreenState extends State<GemCrafterScreen> {
-  final List<String> _players = [];
-  final TextEditingController _nameCtrl = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(milliseconds: 100), () => _focusNode.requestFocus());
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _addPlayer(String name) {
-    if (name.trim().isNotEmpty && _players.length < 4) {
-      setState(() { _players.add(name.trim()); });
-      _nameCtrl.clear();
-    }
-    _focusNode.requestFocus();
-  }
-
-  void _removePlayer(int index) {
-    setState(() { _players.removeAt(index); });
-  }
-
-  void _startGame() {
-    if (_players.length >= 2) {
-      Navigator.pushReplacement(context, MaterialPageRoute(
-        // V33 FIX: Securely pass the players memory array to the Board Screen
-        builder: (_) => GemCrafterBoardScreen(playerNames: _players)
-      ));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9F7F3),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 24),
-              const Center(child: Text("OFFLINE DRAFT", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 3))),
-              const SizedBox(height: 8),
-              const Center(child: Text("GEM CRAFTER", style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFF2A9D8F), letterSpacing: -1))),
-              const SizedBox(height: 48),
-              
-              TextField(
-                controller: _nameCtrl,
-                focusNode: _focusNode,
-                textInputAction: TextInputAction.done,
-                onSubmitted: _addPlayer,
-                maxLength: 12,
-                decoration: InputDecoration(
-                  counterText: "",
-                  hintText: _players.length < 4 ? "Enter Player Name..." : "Max 4 Players",
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF2A9D8F), width: 2)),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.add_circle, color: Color(0xFF2A9D8F)),
-                    onPressed: () => _addPlayer(_nameCtrl.text),
-                  )
-                ),
-                enabled: _players.length < 4,
-              ),
-              const SizedBox(height: 32),
-
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _players.length,
-                  itemBuilder: (ctx, i) {
-                    List<Color> aColors = [const Color(0xFF2A9D8F), const Color(0xFF8E44AD), const Color(0xFFE9C46A), const Color(0xFFE76F51)];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey[100]!), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 2), blurRadius: 4)]),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              CircleAvatar(radius: 14, backgroundColor: aColors[i % aColors.length], child: Text(_players[i][0].toUpperCase(), style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold))),
-                              const SizedBox(width: 12),
-                              Text(_players[i], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2B2D42))),
-                            ],
-                          ),
-                          GestureDetector(
-                            onTap: () => _removePlayer(i),
-                            child: const Icon(Icons.close, color: Color(0xFFE76F51), size: 20),
-                          )
-                        ],
-                      ),
-                    );
-                  }
-                ),
-              ),
-
-              AnimatedOpacity(
-                opacity: _players.length >= 2 ? 1.0 : 0.4,
-                duration: const Duration(milliseconds: 200),
-                child: IgnorePointer(
-                  ignoring: _players.length < 2,
-                  child: PhysicsButton(
-                    text: "START MATCH",
-                    color: const Color(0xFF2A9D8F),
-                    shadowColor: const Color(0xFF1E7066),
-                    onTap: _startGame,
-                  ),
-                ),
-              )
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// --- 2. STRICT DATA MODELS ---
+// --- 1. STRICT DATA MODELS ---
 
 enum GemType { emerald, amethyst, yellow, ruby, sapphire, gold }
 
@@ -224,18 +73,17 @@ class PlayerState {
   PlayerState(this.name, this.avatar, this.avatarColor);
 }
 
-// --- 3. MAIN BOARD SCREEN ---
+// --- MAIN SCREEN ---
 
-// V33 FIX: Renamed to GemCrafterBoardScreen
-class GemCrafterBoardScreen extends StatefulWidget {
+class GemCrafterScreen extends StatefulWidget {
   final List<String>? playerNames; 
-  const GemCrafterBoardScreen({super.key, this.playerNames});
+  const GemCrafterScreen({super.key, this.playerNames});
 
   @override
-  State<GemCrafterBoardScreen> createState() => _GemCrafterBoardScreenState();
+  State<GemCrafterScreen> createState() => _GemCrafterScreenState();
 }
 
-class _GemCrafterBoardScreenState extends State<GemCrafterBoardScreen> {
+class _GemCrafterScreenState extends State<GemCrafterScreen> {
   
   late List<PlayerState> _players;
   int _turnIndex = 0;
