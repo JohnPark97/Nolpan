@@ -2,16 +2,28 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../../../core/ui/physics_button.dart';
 
-// --- 0. LOBBY SCREEN (FAST-ADD UX) ---
+// --- 0. ROUTING SAFEGUARDS ---
 
-class MerchantLobbyScreen extends StatefulWidget {
+// V33 FIX: If main.dart imports MerchantLobbyScreen, it safely proxies to the real Lobby.
+class MerchantLobbyScreen extends StatelessWidget {
   const MerchantLobbyScreen({super.key});
-
   @override
-  State<MerchantLobbyScreen> createState() => _MerchantLobbyScreenState();
+  Widget build(BuildContext context) {
+    return const GemCrafterScreen();
+  }
 }
 
-class _MerchantLobbyScreenState extends State<MerchantLobbyScreen> {
+// --- 1. LOBBY SCREEN (ENTRY POINT) ---
+
+// V33 FIX: Renamed to GemCrafterScreen so main.dart hits the Lobby natively.
+class GemCrafterScreen extends StatefulWidget {
+  const GemCrafterScreen({super.key});
+
+  @override
+  State<GemCrafterScreen> createState() => _GemCrafterScreenState();
+}
+
+class _GemCrafterScreenState extends State<GemCrafterScreen> {
   final List<String> _players = [];
   final TextEditingController _nameCtrl = TextEditingController();
   final FocusNode _focusNode = FocusNode();
@@ -44,7 +56,8 @@ class _MerchantLobbyScreenState extends State<MerchantLobbyScreen> {
   void _startGame() {
     if (_players.length >= 2) {
       Navigator.pushReplacement(context, MaterialPageRoute(
-        builder: (_) => GemCrafterScreen(playerNames: _players)
+        // V33 FIX: Securely pass the players memory array to the Board Screen
+        builder: (_) => GemCrafterBoardScreen(playerNames: _players)
       ));
     }
   }
@@ -77,7 +90,7 @@ class _MerchantLobbyScreenState extends State<MerchantLobbyScreen> {
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none), // V31 HOTFIX
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF2A9D8F), width: 2)),
                   suffixIcon: IconButton(
@@ -140,7 +153,7 @@ class _MerchantLobbyScreenState extends State<MerchantLobbyScreen> {
   }
 }
 
-// --- 1. STRICT DATA MODELS ---
+// --- 2. STRICT DATA MODELS ---
 
 enum GemType { emerald, amethyst, yellow, ruby, sapphire, gold }
 
@@ -211,17 +224,18 @@ class PlayerState {
   PlayerState(this.name, this.avatar, this.avatarColor);
 }
 
-// --- MAIN SCREEN ---
+// --- 3. MAIN BOARD SCREEN ---
 
-class GemCrafterScreen extends StatefulWidget {
+// V33 FIX: Renamed to GemCrafterBoardScreen
+class GemCrafterBoardScreen extends StatefulWidget {
   final List<String>? playerNames; 
-  const GemCrafterScreen({super.key, this.playerNames});
+  const GemCrafterBoardScreen({super.key, this.playerNames});
 
   @override
-  State<GemCrafterScreen> createState() => _GemCrafterScreenState();
+  State<GemCrafterBoardScreen> createState() => _GemCrafterBoardScreenState();
 }
 
-class _GemCrafterScreenState extends State<GemCrafterScreen> {
+class _GemCrafterBoardScreenState extends State<GemCrafterBoardScreen> {
   
   late List<PlayerState> _players;
   int _turnIndex = 0;
