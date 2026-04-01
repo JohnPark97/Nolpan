@@ -70,7 +70,7 @@ class PlayerState {
   };
   
   List<MarketCard> reservedCards = [];
-  List<NobleCard> earnedNobles = []; // V20.1: Track earned nobles
+  List<NobleCard> earnedNobles = []; 
 
   PlayerState(this.name, this.avatar, this.avatarColor);
 }
@@ -231,6 +231,9 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   }
 
   void _endTurnOrDiscard() {
+    // V20.2 PATCH: Clear selection buffer explicitly on EVERY turn conclusion to prevent ghost selections
+    _draftSelection.clear(); 
+    
     PlayerState player = _players[_turnIndex];
     
     NobleCard? claimedNoble;
@@ -258,7 +261,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
       ));
     }
 
-    // Trigger Final Round if 15 points reached
     if (player.score >= 15) {
       _isFinalRound = true;
     }
@@ -270,7 +272,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
         _isDiscarding = true;
       } else {
         _isDiscarding = false;
-        // If it's the final round AND the last player just finished their turn
         if (_isFinalRound && _turnIndex == _players.length - 1) {
           _isGameOver = true;
         } else {
@@ -330,7 +331,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
         player.wallet[gem] = (player.wallet[gem] ?? 0) + 1;
         _bank[gem] = (_bank[gem] ?? 0) - 1;
       }
-      _draftSelection.clear();
     });
     _endTurnOrDiscard();
   }
@@ -540,7 +540,36 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
                     );
                   }).toList(),
                   const SizedBox(height: 48),
-                  PhysicsButton(text: "EXIT TO LOBBY", color: const Color(0xFFE76F51), shadowColor: const Color(0xFFB3563F), onTap: () => Navigator.pop(context)),
+                  PhysicsButton(
+                    text: "REMATCH",
+                    color: const Color(0xFF2A9D8F),
+                    shadowColor: const Color(0xFF1E7066),
+                    onTap: () {
+                      setState(() {
+                        _isGameOver = false;
+                        _isFinalRound = false;
+                        List<String> currentNames = _players.map((p) => p.name).toList();
+                        _initializeGame(currentNames);
+                      });
+                    }
+                  ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.blueGrey[200]!, width: 2),
+                        boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 4), blurRadius: 0)]
+                      ),
+                      child: const Center(
+                        child: Text("EXIT TO LOBBY", style: TextStyle(color: Colors.blueGrey, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.5))
+                      ),
+                    ),
+                  )
                 ]
               )
             )
@@ -1079,19 +1108,39 @@ class MarketCardWidget extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(card.points > 0 ? card.points.toString() : "", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[700], height: 1)),
+                  // V20.2 Contrast Patch: Enhanced shadow and forced dark text on yellow
                   Container(
-                    width: 14, height: 14,
-                    decoration: BoxDecoration(color: card.provides.color, shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 1)]),
-                    child: Center(child: _buildGemIcon(card.provides, 8, color: Colors.white)),
+                    width: 16, height: 16,
+                    decoration: BoxDecoration(
+                      color: card.provides.color, 
+                      shape: BoxShape.circle, 
+                      boxShadow: const [BoxShadow(color: Colors.black26, offset: Offset(0, 1), blurRadius: 2)]
+                    ),
+                    child: Center(child: _buildGemIcon(card.provides, 10, color: card.provides == GemType.yellow ? Colors.black87 : Colors.white)),
                   )
                 ],
               ),
               Wrap(
                 spacing: 2, runSpacing: 2,
                 children: card.costs.entries.map((entry) => Container(
-                  width: 12, height: 12,
-                  decoration: BoxDecoration(color: entry.key.color, shape: BoxShape.circle),
-                  child: Center(child: Text(entry.value.toString(), style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w900))),
+                  width: 14, height: 14,
+                  // V20.2 Contrast Patch: Added drop shadow against white card face
+                  decoration: BoxDecoration(
+                    color: entry.key.color, 
+                    shape: BoxShape.circle,
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 1, offset: Offset(0, 1))]
+                  ),
+                  child: Center(
+                    child: Text(
+                      entry.value.toString(), 
+                      // V20.2 Contrast Patch: Darkened text strictly for yellow token costs
+                      style: TextStyle(
+                        color: entry.key == GemType.yellow ? Colors.black87 : Colors.white, 
+                        fontSize: 8, 
+                        fontWeight: FontWeight.w900
+                      )
+                    )
+                  ),
                 )).toList(),
               )
             ],
