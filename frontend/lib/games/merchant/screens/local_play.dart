@@ -74,7 +74,8 @@ class PlayerState {
 // --- MAIN SCREEN ---
 
 class GemCrafterScreen extends StatefulWidget {
-  const GemCrafterScreen({super.key});
+  final List<String>? playerNames; // V29 FIX: Accept dynamic names
+  const GemCrafterScreen({super.key, this.playerNames});
 
   @override
   State<GemCrafterScreen> createState() => _GemCrafterScreenState();
@@ -107,7 +108,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     _initializeGame();
   }
 
-  // V28 FIX: Flawless, Exact Historical Card Matrix Generator
   List<MarketCard> _generateDeck(int tier, List<Map<String, dynamic>> patterns) {
     List<MarketCard> deck = [];
     List<GemType> colors = [GemType.emerald, GemType.amethyst, GemType.yellow, GemType.ruby, GemType.sapphire];
@@ -130,7 +130,9 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   }
 
   void _initializeGame() {
-    _players = [PlayerState("Jahn", "J"), PlayerState("Bee", "B")];
+    // V29 FIX: Dynamic names with fallback
+    List<String> names = widget.playerNames ?? ["Player 1", "Player 2"];
+    _players = names.map((name) => PlayerState(name, name.isNotEmpty ? name[0].toUpperCase() : "?")).toList();
 
     // Tier 1 (40 Cards)
     _deckTier1 = _generateDeck(1, [
@@ -183,10 +185,11 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     _deckTier2.shuffle();
     _deckTier3.shuffle();
 
+    // V29 FIX: Correctly map Tier 1 (cheapest) to the bottom, Tier 3 (expensive) to the top.
     _market = [
-      _drawCard(3), _drawCard(3), _drawCard(3), _drawCard(3),
-      _drawCard(2), _drawCard(2), _drawCard(2), _drawCard(2),
-      _drawCard(1), _drawCard(1), _drawCard(1), _drawCard(1),
+      _drawCard(1), _drawCard(1), _drawCard(1), _drawCard(1), // 0-3 (Tier 1 - Bottom)
+      _drawCard(2), _drawCard(2), _drawCard(2), _drawCard(2), // 4-7 (Tier 2 - Middle)
+      _drawCard(3), _drawCard(3), _drawCard(3), _drawCard(3), // 8-11 (Tier 3 - Top)
     ];
   }
 
@@ -207,7 +210,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     ));
   }
 
-  // V28 FIX: Noble Claiming Logic automatically triggered at end of turn
   void _endTurnOrDiscard() {
     PlayerState player = _players[_turnIndex];
     
@@ -791,44 +793,44 @@ class OpponentCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                ...[GemType.emerald, GemType.amethyst, GemType.yellow, GemType.ruby, GemType.sapphire].map((g) {
-                  int c = player.engine[g] ?? 0;
-                  return Container(
-                    width: 14, height: 14, margin: const EdgeInsets.only(right: 4),
+          // V29 FIX: Strict 6-column alignment layout
+          Row(
+            children: GemType.values.map((g) {
+              if (g == GemType.gold) return const Expanded(child: SizedBox());
+              int c = player.engine[g] ?? 0;
+              return Expanded(
+                child: Center(
+                  child: Container(
+                    width: 14, height: 14,
                     decoration: BoxDecoration(
                       color: c > 0 ? g.color : g.color.withOpacity(0.2), 
                       borderRadius: BorderRadius.circular(3),
                       border: c > 0 ? Border.all(color: Colors.black12) : null
                     ),
                     child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
-                  );
-                }),
-              ],
-            ),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
           const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: GemType.values.map((g) {
-                int c = player.wallet[g] ?? 0;
-                return Container(
-                  width: 14, height: 14, margin: const EdgeInsets.only(right: 4),
-                  decoration: BoxDecoration(
-                    color: g.gradient == null ? g.color.withOpacity(c > 0 ? 1.0 : 0.15) : null,
-                    gradient: g.gradient != null && c > 0 ? g.gradient : null,
-                    shape: BoxShape.circle,
+          Row(
+            children: GemType.values.map((g) {
+              int c = player.wallet[g] ?? 0;
+              return Expanded(
+                child: Center(
+                  child: Container(
+                    width: 14, height: 14,
+                    decoration: BoxDecoration(
+                      color: g.gradient == null ? g.color.withOpacity(c > 0 ? 1.0 : 0.15) : null,
+                      gradient: g.gradient != null && c > 0 ? g.gradient : null,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
                   ),
-                  child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
-                );
-              }).toList(),
-            ),
+                ),
+              );
+            }).toList(),
           ),
         ],
       ),
@@ -1002,18 +1004,19 @@ class EngineBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     bool active = count > 0;
+    // V29 FIX: Engine blocks retain native color at zero count for UX visibility
     return Container(
       height: 40,
       decoration: BoxDecoration(
-        color: active ? gem.color : Colors.blueGrey[100],
+        color: active ? gem.color : gem.color.withOpacity(0.5),
         borderRadius: BorderRadius.circular(8),
-        border: active ? const Border(bottom: BorderSide(color: Colors.black26, width: 3)) : Border.all(color: Colors.blueGrey[200]!, width: 2),
+        border: const Border(bottom: BorderSide(color: Colors.black26, width: 3)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(count.toString(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: active ? Colors.white : Colors.blueGrey[300], height: 1)),
-          if (active) Padding(padding: const EdgeInsets.only(top: 2), child: _buildGemIcon(gem, 10, color: Colors.white)),
+          Text(count.toString(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: active ? Colors.white : Colors.white.withOpacity(0.7), height: 1)),
+          Padding(padding: const EdgeInsets.only(top: 2), child: _buildGemIcon(gem, 10, color: active ? Colors.white : Colors.white.withOpacity(0.7))),
         ],
       ),
     );
