@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import '../../../core/ui/physics_button.dart';
 
 // --- 1. STRICT DATA MODELS ---
 
@@ -16,14 +17,14 @@ extension GemTypeExt on GemType {
       case GemType.gold: return const Color(0xFFD4AF37);
     }
   }
-  String get textIcon {
+  IconData get iconData {
     switch (this) {
-      case GemType.emerald: return '★';
-      case GemType.amethyst: return '♦';
-      case GemType.yellow: return '●';
-      case GemType.ruby: return '≡';
-      case GemType.sapphire: return '✖';
-      case GemType.gold: return 'W';
+      case GemType.emerald: return Icons.star;
+      case GemType.amethyst: return Icons.diamond;
+      case GemType.yellow: return Icons.circle;
+      case GemType.ruby: return Icons.menu;
+      case GemType.sapphire: return Icons.close;
+      case GemType.gold: return Icons.stars;
     }
   }
   Gradient? get gradient {
@@ -86,6 +87,9 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   };
 
   List<MarketCard> _market = [];
+  List<MarketCard> _deckTier1 = [];
+  List<MarketCard> _deckTier2 = [];
+  List<MarketCard> _deckTier3 = [];
   
   // DRAFT & DISCARD STATE
   List<GemType> _draftSelection = [];
@@ -94,30 +98,58 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeTests();
+    _initializeGame();
   }
 
-  void _initializeTests() {
-    // V25 FIX: Initialize clean player states with NO dummy data
-    PlayerState p1 = PlayerState("Jahn", "J");
-    PlayerState p2 = PlayerState("Bee", "B");
+  MarketCard _generateCard(int tier, int id) {
+    final rand = math.Random(id);
+    GemType provides = GemType.values[rand.nextInt(5)];
+    int points = 0;
+    Map<GemType, int> costs = {};
+    int costTotal = 0;
+    
+    if (tier == 1) {
+      points = rand.nextDouble() > 0.8 ? 1 : 0;
+      costTotal = rand.nextInt(3) + 3; // 3 to 5 gems
+    } else if (tier == 2) {
+      points = rand.nextInt(3) + 1; // 1 to 3 pts
+      costTotal = rand.nextInt(4) + 5; // 5 to 8 gems
+    } else {
+      points = rand.nextInt(3) + 3; // 3 to 5 pts
+      costTotal = rand.nextInt(5) + 7; // 7 to 11 gems
+    }
 
-    _players = [p1, p2];
+    while (costs.values.fold(0, (a, b) => a + b) < costTotal) {
+      GemType c = GemType.values[rand.nextInt(5)];
+      if (c == provides && rand.nextBool()) continue; 
+      costs[c] = (costs[c] ?? 0) + 1;
+    }
+    return MarketCard(id: id, tier: tier, points: points, provides: provides, costs: costs);
+  }
+
+  void _initializeGame() {
+    _players = [PlayerState("Jahn", "J"), PlayerState("Bee", "B")];
+
+    _deckTier1 = List.generate(40, (i) => _generateCard(1, i));
+    _deckTier2 = List.generate(30, (i) => _generateCard(2, 100 + i));
+    _deckTier3 = List.generate(20, (i) => _generateCard(3, 200 + i));
+    
+    _deckTier1.shuffle();
+    _deckTier2.shuffle();
+    _deckTier3.shuffle();
 
     _market = [
-      const MarketCard(id: 1, tier: 1, points: 2, provides: GemType.sapphire, costs: {GemType.ruby: 3}),
-      const MarketCard(id: 2, tier: 1, points: 0, provides: GemType.ruby, costs: {GemType.emerald: 2}),
-      const MarketCard(id: 3, tier: 1, points: 0, provides: GemType.emerald, costs: {GemType.sapphire: 1, GemType.amethyst: 2}),
-      const MarketCard(id: 4, tier: 1, points: 0, provides: GemType.amethyst, costs: {GemType.yellow: 2, GemType.ruby: 2}),
-      const MarketCard(id: 5, tier: 2, points: 2, provides: GemType.yellow, costs: {GemType.emerald: 4, GemType.sapphire: 2}),
-      const MarketCard(id: 6, tier: 2, points: 1, provides: GemType.ruby, costs: {GemType.yellow: 3, GemType.amethyst: 2}),
-      const MarketCard(id: 7, tier: 2, points: 2, provides: GemType.sapphire, costs: {GemType.ruby: 5}),
-      const MarketCard(id: 8, tier: 2, points: 2, provides: GemType.amethyst, costs: {GemType.emerald: 4, GemType.ruby: 1}),
-      const MarketCard(id: 9, tier: 3, points: 4, provides: GemType.sapphire, costs: {GemType.amethyst: 6, GemType.ruby: 3}),
-      const MarketCard(id: 10, tier: 3, points: 5, provides: GemType.emerald, costs: {GemType.emerald: 7, GemType.yellow: 3}),
-      const MarketCard(id: 11, tier: 3, points: 3, provides: GemType.amethyst, costs: {GemType.sapphire: 5, GemType.ruby: 3}),
-      const MarketCard(id: 12, tier: 3, points: 4, provides: GemType.ruby, costs: {GemType.amethyst: 7}),
+      _drawCard(3), _drawCard(3), _drawCard(3), _drawCard(3),
+      _drawCard(2), _drawCard(2), _drawCard(2), _drawCard(2),
+      _drawCard(1), _drawCard(1), _drawCard(1), _drawCard(1),
     ];
+  }
+
+  MarketCard _drawCard(int tier) {
+    if (tier == 1 && _deckTier1.isNotEmpty) return _deckTier1.removeLast();
+    if (tier == 2 && _deckTier2.isNotEmpty) return _deckTier2.removeLast();
+    if (tier == 3 && _deckTier3.isNotEmpty) return _deckTier3.removeLast();
+    return MarketCard(id: -1, tier: tier, points: 0, provides: GemType.emerald, costs: {}); 
   }
 
   // --- CORE ENGINE LOGIC ---
@@ -203,7 +235,22 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     setState(() => _draftSelection.clear());
   }
 
-  void _reserveCard(MarketCard card, {bool fromDeck = false}) {
+  void _reserveFromBoard(MarketCard card) {
+    _executeReservation(card);
+    int idx = _market.indexOf(card);
+    if (idx != -1) {
+      setState(() => _market[idx] = _drawCard(card.tier));
+    }
+  }
+
+  void _reserveFromDeck(int tier) {
+    MarketCard card = _drawCard(tier);
+    if (card.id != -1) {
+      _executeReservation(card);
+    }
+  }
+
+  void _executeReservation(MarketCard card) {
     if (_isDiscarding) return;
     PlayerState player = _players[_turnIndex];
     
@@ -217,19 +264,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
       if ((_bank[GemType.gold] ?? 0) > 0) {
         player.wallet[GemType.gold] = (player.wallet[GemType.gold] ?? 0) + 1;
         _bank[GemType.gold] = _bank[GemType.gold]! - 1;
-      }
-      
-      if (!fromDeck) {
-        int idx = _market.indexOf(card);
-        if (idx != -1) {
-          _market[idx] = MarketCard(
-            id: math.Random().nextInt(1000), 
-            tier: card.tier, 
-            points: card.tier, 
-            provides: GemType.values[math.Random().nextInt(5)], 
-            costs: {GemType.values[math.Random().nextInt(5)]: card.tier + 1}
-          );
-        }
       }
     });
     _endTurnOrDiscard();
@@ -247,11 +281,7 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     return (player.wallet[GemType.gold] ?? 0) >= wildTokensNeeded;
   }
 
-  void _purchaseCard(MarketCard card) {
-    if (_isDiscarding) return;
-    PlayerState player = _players[_turnIndex];
-    if (!_canAfford(card, player)) return;
-
+  void _executePurchaseTransaction(MarketCard card, PlayerState player) {
     int wildTokensUsed = 0;
     card.costs.forEach((gemType, costRequired) {
       int deficit = costRequired - (player.engine[gemType] ?? 0);
@@ -275,19 +305,82 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
 
     player.engine[card.provides] = (player.engine[card.provides] ?? 0) + 1;
     player.score += card.points;
+  }
 
-    int cardIndex = _market.indexOf(card);
-    if (cardIndex != -1) {
-      _market[cardIndex] = MarketCard(
-        id: math.Random().nextInt(1000), 
-        tier: card.tier, 
-        points: 0, 
-        provides: GemType.values[math.Random().nextInt(5)], 
-        costs: {GemType.values[math.Random().nextInt(5)]: 1}
-      );
-    }
+  void _purchaseCard(MarketCard card) {
+    if (_isDiscarding) return;
+    PlayerState player = _players[_turnIndex];
+    if (!_canAfford(card, player)) return;
 
+    setState(() {
+      _executePurchaseTransaction(card, player);
+      int cardIndex = _market.indexOf(card);
+      if (cardIndex != -1) {
+        _market[cardIndex] = _drawCard(card.tier);
+      }
+    });
     _endTurnOrDiscard();
+  }
+
+  void _purchaseReservedCard(MarketCard card) {
+    if (_isDiscarding) return;
+    PlayerState player = _players[_turnIndex];
+    if (!_canAfford(card, player)) return;
+
+    setState(() {
+      _executePurchaseTransaction(card, player);
+      player.reservedCards.remove(card);
+    });
+    _endTurnOrDiscard();
+  }
+
+  void _showReservedCardModal(MarketCard card) {
+    bool affordable = _canAfford(card, _players[_turnIndex]);
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(color: const Color(0xFFF9F7F3), borderRadius: BorderRadius.circular(24)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("RESERVED CARD", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 2)),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: 140, height: 180, 
+                child: MarketCardWidget(card: card, affordable: true, onTap: (){}, onLongPress: (){})
+              ),
+              const SizedBox(height: 24),
+              if (affordable)
+                PhysicsButton(
+                  text: "BUY CARD",
+                  color: const Color(0xFF2A9D8F),
+                  shadowColor: const Color(0xFF1E7066),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _purchaseReservedCard(card);
+                  }
+                )
+              else
+                Container(
+                  width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(12)),
+                  child: const Center(child: Text("CANNOT AFFORD", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)))
+                ),
+              const SizedBox(height: 12),
+              PhysicsButton(
+                text: "CLOSE", 
+                color: const Color(0xFFE76F51), 
+                shadowColor: const Color(0xFFB3563F), 
+                onTap: () => Navigator.pop(ctx)
+              )
+            ]
+          )
+        )
+      )
+    );
   }
 
   // --- UI RENDER ---
@@ -350,7 +443,7 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
           ),
           const SizedBox(height: 6),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start, // V25 FIX: Prevent stretching
+            crossAxisAlignment: CrossAxisAlignment.start, 
             children: opponents.map((opp) => Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(right: 6.0),
@@ -388,11 +481,11 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
             width: 48,
             child: Column(
               children: [
-                Expanded(child: DeckCard(tier: 3, count: 12, textColor: Colors.lightBlueAccent, onTap: () => _reserveCard(const MarketCard(id: 999, tier: 3, points: 3, provides: GemType.sapphire, costs: {}), fromDeck: true))),
+                Expanded(child: DeckCard(tier: 3, count: _deckTier3.length, textColor: Colors.lightBlueAccent, onTap: () => _reserveFromDeck(3))),
                 const SizedBox(height: 6),
-                Expanded(child: DeckCard(tier: 2, count: 24, textColor: Colors.amberAccent, onTap: () => _reserveCard(const MarketCard(id: 998, tier: 2, points: 1, provides: GemType.emerald, costs: {}), fromDeck: true))),
+                Expanded(child: DeckCard(tier: 2, count: _deckTier2.length, textColor: Colors.amberAccent, onTap: () => _reserveFromDeck(2))),
                 const SizedBox(height: 6),
-                Expanded(child: DeckCard(tier: 1, count: 36, textColor: const Color(0xFF2A9D8F), onTap: () => _reserveCard(const MarketCard(id: 997, tier: 1, points: 0, provides: GemType.ruby, costs: {}), fromDeck: true))),
+                Expanded(child: DeckCard(tier: 1, count: _deckTier1.length, textColor: const Color(0xFF2A9D8F), onTap: () => _reserveFromDeck(1))),
               ],
             ),
           ),
@@ -400,11 +493,11 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
           Expanded(
             child: Column(
               children: [
-                Expanded(child: Row(children: _market.sublist(8, 12).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveCard(c))))).toList())),
+                Expanded(child: Row(children: _market.sublist(8, 12).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveFromBoard(c))))).toList())),
                 const SizedBox(height: 6),
-                Expanded(child: Row(children: _market.sublist(4, 8).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveCard(c))))).toList())),
+                Expanded(child: Row(children: _market.sublist(4, 8).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveFromBoard(c))))).toList())),
                 const SizedBox(height: 6),
-                Expanded(child: Row(children: _market.sublist(0, 4).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveCard(c))))).toList())),
+                Expanded(child: Row(children: _market.sublist(0, 4).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveFromBoard(c))))).toList())),
               ],
             ),
           ),
@@ -483,13 +576,18 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
                   const SizedBox(width: 6),
                   ...List.generate(3, (i) {
                     bool filled = i < player.reservedCards.length;
-                    return Container(
-                      width: 20, height: 28, margin: const EdgeInsets.only(left: 4),
-                      decoration: BoxDecoration(
-                        color: filled ? player.reservedCards[i].provides.color : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4), 
-                        border: Border.all(color: filled ? Colors.black26 : Colors.blueGrey[300]!)
-                      )
+                    return GestureDetector(
+                      onTap: () {
+                        if (filled) _showReservedCardModal(player.reservedCards[i]);
+                      },
+                      child: Container(
+                        width: 20, height: 28, margin: const EdgeInsets.only(left: 4),
+                        decoration: BoxDecoration(
+                          color: filled ? player.reservedCards[i].provides.color : Colors.transparent,
+                          borderRadius: BorderRadius.circular(4), 
+                          border: Border.all(color: filled ? Colors.black26 : Colors.blueGrey[300]!)
+                        )
+                      ),
                     );
                   })
                 ],
@@ -571,17 +669,7 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
 // --- WIDGET COMPONENTS ---
 
 Widget _buildGemIcon(GemType gem, double size, {Color? color}) {
-  return Text(
-    gem.textIcon, 
-    style: TextStyle(
-      fontSize: size, 
-      fontWeight: FontWeight.w900, 
-      color: color ?? Colors.white, 
-      height: 1.1,
-      leadingDistribution: TextLeadingDistribution.even
-    ),
-    textAlign: TextAlign.center,
-  );
+  return Icon(gem.iconData, size: size * 1.2, color: color ?? Colors.white);
 }
 
 class OpponentCard extends StatelessWidget {
@@ -600,7 +688,7 @@ class OpponentCard extends StatelessWidget {
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min, // V25 FIX: Hug content to remove gaps
+        mainAxisSize: MainAxisSize.min, 
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
@@ -617,35 +705,40 @@ class OpponentCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              ...[GemType.emerald, GemType.amethyst, GemType.yellow, GemType.ruby, GemType.sapphire].map((g) {
-                int c = player.engine[g] ?? 0;
-                return Container(
-                  width: 14, height: 14,
-                  decoration: BoxDecoration(color: g.color.withOpacity(c > 0 ? 1.0 : 0.15), borderRadius: BorderRadius.circular(3)),
-                  child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
-                );
-              }),
-              const SizedBox(width: 14),
-            ],
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                ...[GemType.emerald, GemType.amethyst, GemType.yellow, GemType.ruby, GemType.sapphire].map((g) {
+                  int c = player.engine[g] ?? 0;
+                  return Container(
+                    width: 14, height: 14, margin: const EdgeInsets.only(right: 4),
+                    decoration: BoxDecoration(color: g.color.withOpacity(c > 0 ? 1.0 : 0.15), borderRadius: BorderRadius.circular(3)),
+                    child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
+                  );
+                }),
+              ],
+            ),
           ),
           const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: GemType.values.map((g) {
-              int c = player.wallet[g] ?? 0;
-              return Container(
-                width: 14, height: 14,
-                decoration: BoxDecoration(
-                  color: g.gradient == null ? g.color.withOpacity(c > 0 ? 1.0 : 0.15) : null,
-                  gradient: g.gradient != null && c > 0 ? g.gradient : null,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
-              );
-            }).toList(),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: GemType.values.map((g) {
+                int c = player.wallet[g] ?? 0;
+                return Container(
+                  width: 14, height: 14, margin: const EdgeInsets.only(right: 4),
+                  decoration: BoxDecoration(
+                    color: g.gradient == null ? g.color.withOpacity(c > 0 ? 1.0 : 0.15) : null,
+                    gradient: g.gradient != null && c > 0 ? g.gradient : null,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
+                );
+              }).toList(),
+            ),
           ),
         ],
       ),
@@ -747,7 +840,7 @@ class MarketCardWidget extends StatelessWidget {
                   Container(
                     width: 14, height: 14,
                     decoration: BoxDecoration(color: card.provides.color, shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 1)]),
-                    child: Center(child: _buildGemIcon(card.provides, 9, color: Colors.white)),
+                    child: Center(child: _buildGemIcon(card.provides, 8, color: Colors.white)),
                   )
                 ],
               ),
@@ -778,31 +871,32 @@ class BankToken extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     bool empty = count == 0;
+    double tokenOpacity = empty ? 0.3 : 1.0;
     return GestureDetector(
       onTap: onTap,
-      child: Opacity(
-        opacity: empty ? 0.3 : 1.0,
-        child: Column(
-          children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: gem.gradient == null ? gem.color : null, 
-                gradient: gem.gradient, 
-                shape: BoxShape.circle, 
-                border: Border.all(color: selectedCount > 0 ? const Color(0xFFE76F51) : Colors.white, width: selectedCount > 0 ? 3 : 2), 
-                boxShadow: const [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]
-              ),
-              child: Center(child: _buildGemIcon(gem, 18, color: Colors.white)),
+      child: Column(
+        children: [
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: gem.gradient == null ? gem.color.withOpacity(tokenOpacity) : null, 
+              gradient: gem.gradient != null ? LinearGradient(
+                colors: (gem.gradient as LinearGradient).colors.map((c) => c.withOpacity(tokenOpacity)).toList(),
+                begin: Alignment.topLeft, end: Alignment.bottomRight
+              ) : null,
+              shape: BoxShape.circle, 
+              border: Border.all(color: selectedCount > 0 ? const Color(0xFFE76F51) : Colors.white.withOpacity(tokenOpacity), width: selectedCount > 0 ? 3 : 2), 
+              boxShadow: empty ? [] : const [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]
             ),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: Colors.blueGrey[200], borderRadius: BorderRadius.circular(12)),
-              child: Text(count.toString(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[600], height: 1)),
-            )
-          ],
-        ),
+            child: Center(child: _buildGemIcon(gem, 18, color: Colors.white.withOpacity(tokenOpacity))),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(color: Colors.blueGrey[200], borderRadius: BorderRadius.circular(12)),
+            child: Text(count.toString(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[600], height: 1)),
+          )
+        ],
       ),
     );
   }
