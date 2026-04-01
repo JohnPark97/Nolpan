@@ -33,7 +33,7 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
   Map<String, dynamic> _gameState = {};
   String _turnPlayer = "";
   bool _isReviewingBoard = false;
-  String _selectedGame = "mosaic"; // SPRINT 18.3: Platform Game Selector
+  String _selectedGame = "mosaic"; 
   
   // PHYSICS STATE
   String? heldColor;
@@ -542,7 +542,6 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
     );
   }
 
-  // SPRINT 18.3: Platform Offline Arcade Lobby
   Widget _buildMiniatureMosaic() {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
