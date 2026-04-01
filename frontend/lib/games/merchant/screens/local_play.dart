@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 import '../../../core/ui/physics_button.dart';
 
 // --- 1. STRICT DATA MODELS ---
@@ -45,6 +44,13 @@ class MarketCard {
   const MarketCard({required this.id, required this.tier, required this.points, required this.provides, required this.costs});
 }
 
+class NobleCard {
+  final int id;
+  final int points;
+  final Map<GemType, int> requirements;
+  const NobleCard({required this.id, required this.points, required this.requirements});
+}
+
 class PlayerState {
   final String name;
   final String avatar;
@@ -64,7 +70,6 @@ class PlayerState {
 
   PlayerState(this.name, this.avatar);
 }
-
 
 // --- MAIN SCREEN ---
 
@@ -90,10 +95,11 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   List<MarketCard> _deckTier1 = [];
   List<MarketCard> _deckTier2 = [];
   List<MarketCard> _deckTier3 = [];
+  List<NobleCard> _availableNobles = [];
   
-  // DRAFT & DISCARD STATE
   List<GemType> _draftSelection = [];
   bool _isDiscarding = false;
+  int _globalCardId = 1;
 
   @override
   void initState() {
@@ -101,43 +107,78 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     _initializeGame();
   }
 
-  // V27 FIX: Accurate Splendor Costs
-  MarketCard _generateCard(int tier, int id) {
-    final rand = math.Random(id);
-    GemType provides = GemType.values[rand.nextInt(5)]; // 0-4 (No Gold)
-    int points = 0;
-    Map<GemType, int> costs = {};
-    int costTotal = 0;
-    
-    if (tier == 1) {
-      points = rand.nextDouble() > 0.8 ? 1 : 0;
-      List<int> validCosts = [3, 4, 5];
-      costTotal = validCosts[rand.nextInt(validCosts.length)];
-    } else if (tier == 2) {
-      points = rand.nextInt(3) + 1; // 1 to 3 pts
-      List<int> validCosts = [5, 6, 7, 8];
-      costTotal = validCosts[rand.nextInt(validCosts.length)];
-    } else {
-      points = rand.nextInt(3) + 3; // 3 to 5 pts
-      List<int> validCosts = [7, 10, 12, 14];
-      costTotal = validCosts[rand.nextInt(validCosts.length)];
-    }
+  // V28 FIX: Flawless, Exact Historical Card Matrix Generator
+  List<MarketCard> _generateDeck(int tier, List<Map<String, dynamic>> patterns) {
+    List<MarketCard> deck = [];
+    List<GemType> colors = [GemType.emerald, GemType.amethyst, GemType.yellow, GemType.ruby, GemType.sapphire];
 
-    while (costs.values.fold(0, (a, b) => a + b) < costTotal) {
-      GemType c = GemType.values[rand.nextInt(5)]; // 0-4 (No Gold)
-      if (c == provides && rand.nextBool()) continue; 
-      costs[c] = (costs[c] ?? 0) + 1;
+    for (var p in patterns) {
+      int points = p['points'];
+      List<int> costs = List<int>.from(p['cost']);
+
+      for (int i = 0; i < 5; i++) {
+        GemType provides = colors[i];
+        Map<GemType, int> costMap = {};
+        for (int j = 0; j < costs.length; j++) {
+          GemType costColor = colors[(i + j + 1) % 5];
+          costMap[costColor] = costs[j];
+        }
+        deck.add(MarketCard(id: _globalCardId++, tier: tier, points: points, provides: provides, costs: costMap));
+      }
     }
-    return MarketCard(id: id, tier: tier, points: points, provides: provides, costs: costs);
+    return deck;
   }
 
   void _initializeGame() {
     _players = [PlayerState("Jahn", "J"), PlayerState("Bee", "B")];
 
-    _deckTier1 = List.generate(40, (i) => _generateCard(1, i));
-    _deckTier2 = List.generate(30, (i) => _generateCard(2, 100 + i));
-    _deckTier3 = List.generate(20, (i) => _generateCard(3, 200 + i));
-    
+    // Tier 1 (40 Cards)
+    _deckTier1 = _generateDeck(1, [
+      {"points": 0, "cost": [1, 1, 1, 1]},
+      {"points": 0, "cost": [1, 2]},
+      {"points": 0, "cost": [2, 2]},
+      {"points": 0, "cost": [1, 2, 2]},
+      {"points": 0, "cost": [1, 1, 2, 1]},
+      {"points": 0, "cost": [3]},
+      {"points": 0, "cost": [2, 1]},
+      {"points": 1, "cost": [4]},
+    ]);
+
+    // Tier 2 (30 Cards)
+    _deckTier2 = _generateDeck(2, [
+      {"points": 1, "cost": [3, 2, 2]},
+      {"points": 1, "cost": [3, 3]},
+      {"points": 2, "cost": [5]},
+      {"points": 2, "cost": [5, 3]},
+      {"points": 2, "cost": [4, 2, 1]},
+      {"points": 3, "cost": [6]},
+    ]);
+
+    // Tier 3 (20 Cards)
+    _deckTier3 = _generateDeck(3, [
+      {"points": 3, "cost": [3, 3, 3, 5]},
+      {"points": 4, "cost": [7]},
+      {"points": 4, "cost": [6, 3, 3]},
+      {"points": 5, "cost": [7, 3]},
+    ]);
+
+    // 10 Exact Historical Nobles
+    List<NobleCard> allNobles = [
+      NobleCard(id: 1, points: 3, requirements: {GemType.yellow: 3, GemType.sapphire: 3, GemType.amethyst: 3}),
+      NobleCard(id: 2, points: 3, requirements: {GemType.yellow: 3, GemType.ruby: 3, GemType.amethyst: 3}),
+      NobleCard(id: 3, points: 3, requirements: {GemType.sapphire: 3, GemType.emerald: 3, GemType.ruby: 3}),
+      NobleCard(id: 4, points: 3, requirements: {GemType.yellow: 3, GemType.sapphire: 3, GemType.emerald: 3}),
+      NobleCard(id: 5, points: 3, requirements: {GemType.emerald: 3, GemType.ruby: 3, GemType.amethyst: 3}),
+      NobleCard(id: 6, points: 3, requirements: {GemType.ruby: 4, GemType.amethyst: 4}),
+      NobleCard(id: 7, points: 3, requirements: {GemType.emerald: 4, GemType.ruby: 4}),
+      NobleCard(id: 8, points: 3, requirements: {GemType.yellow: 4, GemType.sapphire: 4}),
+      NobleCard(id: 9, points: 3, requirements: {GemType.sapphire: 4, GemType.emerald: 4}),
+      NobleCard(id: 10, points: 3, requirements: {GemType.yellow: 4, GemType.amethyst: 4}),
+    ];
+
+    allNobles.shuffle();
+    _availableNobles = allNobles.take(_players.length + 1).toList();
+
     _deckTier1.shuffle();
     _deckTier2.shuffle();
     _deckTier3.shuffle();
@@ -166,8 +207,35 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     ));
   }
 
+  // V28 FIX: Noble Claiming Logic automatically triggered at end of turn
   void _endTurnOrDiscard() {
     PlayerState player = _players[_turnIndex];
+    
+    // Check Nobles
+    NobleCard? claimedNoble;
+    for (var noble in _availableNobles) {
+      bool meetsReqs = true;
+      noble.requirements.forEach((gem, count) {
+        if ((player.engine[gem] ?? 0) < count) meetsReqs = false;
+      });
+      if (meetsReqs) {
+        claimedNoble = noble;
+        break; // Max 1 per turn
+      }
+    }
+
+    if (claimedNoble != null) {
+      setState(() {
+        player.score += claimedNoble!.points;
+        _availableNobles.remove(claimedNoble);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("${player.name} claimed a Noble!", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        backgroundColor: const Color(0xFFD4AF37),
+        duration: const Duration(seconds: 3),
+      ));
+    }
+
     int totalTokens = player.wallet.values.fold(0, (sum, val) => sum + val);
     
     setState(() {
@@ -465,13 +533,12 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          NobleTile(points: 3, req: {GemType.emerald: 4, GemType.amethyst: 4}),
-          SizedBox(width: 8),
-          NobleTile(points: 3, req: {GemType.ruby: 3, GemType.sapphire: 3, GemType.yellow: 3}),
-          SizedBox(width: 8),
-          NobleTile(points: 3, req: {GemType.amethyst: 4, GemType.sapphire: 4}),
-        ],
+        children: _availableNobles.map((noble) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: NobleTile(noble: noble),
+          );
+        }).toList(),
       ),
     );
   }
@@ -497,11 +564,11 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
           Expanded(
             child: Column(
               children: [
-                Expanded(child: Row(children: _market.sublist(8, 12).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveFromBoard(c))))).toList())),
+                Expanded(child: Row(children: _market.sublist(8, 12).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: c.id == -1 ? const SizedBox.shrink() : MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveFromBoard(c))))).toList())),
                 const SizedBox(height: 6),
-                Expanded(child: Row(children: _market.sublist(4, 8).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveFromBoard(c))))).toList())),
+                Expanded(child: Row(children: _market.sublist(4, 8).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: c.id == -1 ? const SizedBox.shrink() : MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveFromBoard(c))))).toList())),
                 const SizedBox(height: 6),
-                Expanded(child: Row(children: _market.sublist(0, 4).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveFromBoard(c))))).toList())),
+                Expanded(child: Row(children: _market.sublist(0, 4).map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 6.0), child: c.id == -1 ? const SizedBox.shrink() : MarketCardWidget(card: c, affordable: _canAfford(c, currentPlayer), onTap: () => _purchaseCard(c), onLongPress: () => _reserveFromBoard(c))))).toList())),
               ],
             ),
           ),
@@ -532,7 +599,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
             }).toList(),
           ),
           const SizedBox(height: 12),
-          // V27 FIX: Persistent UI to stop layout shifts
           Opacity(
             opacity: hasSelection ? 1.0 : 0.4,
             child: IgnorePointer(
@@ -685,7 +751,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
 
 // --- WIDGET COMPONENTS ---
 
-// V27 FIX: Accurate Gold Token representation
 Widget _buildGemIcon(GemType gem, double size, {Color? color}) {
   if (gem == GemType.gold) {
     return Text('W', style: TextStyle(fontSize: size * 1.1, fontWeight: FontWeight.w900, color: color ?? Colors.white, height: 1.1));
@@ -733,7 +798,6 @@ class OpponentCard extends StatelessWidget {
               children: [
                 ...[GemType.emerald, GemType.amethyst, GemType.yellow, GemType.ruby, GemType.sapphire].map((g) {
                   int c = player.engine[g] ?? 0;
-                  // V27 FIX: Vibrant Opponent Engine Contrast
                   return Container(
                     width: 14, height: 14, margin: const EdgeInsets.only(right: 4),
                     decoration: BoxDecoration(
@@ -773,9 +837,8 @@ class OpponentCard extends StatelessWidget {
 }
 
 class NobleTile extends StatelessWidget {
-  final int points;
-  final Map<GemType, int> req;
-  const NobleTile({super.key, required this.points, required this.req});
+  final NobleCard noble;
+  const NobleTile({super.key, required this.noble});
 
   @override
   Widget build(BuildContext context) {
@@ -791,10 +854,10 @@ class NobleTile extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(points.toString(), style: const TextStyle(color: Color(0xFFB8860B), fontWeight: FontWeight.w900, fontSize: 16, height: 1)),
+          Text(noble.points.toString(), style: const TextStyle(color: Color(0xFFB8860B), fontWeight: FontWeight.w900, fontSize: 16, height: 1)),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: req.entries.map((entry) => Padding(
+            children: noble.requirements.entries.map((entry) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 1),
               child: Column(
                 children: [
@@ -821,14 +884,18 @@ class DeckCard extends StatelessWidget {
   Widget build(BuildContext context) {
     String numeral = tier == 3 ? "III" : (tier == 2 ? "II" : "I");
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.blueGrey[600]!), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 2)]),
-        child: Stack(
-          children: [
-            Center(child: Text(numeral, style: TextStyle(color: textColor.withOpacity(0.8), fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -2))),
-            Positioned(bottom: 4, right: 4, child: Container(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(2)), child: Text(count.toString(), style: const TextStyle(color: Colors.white70, fontSize: 7, fontWeight: FontWeight.bold)))),
-          ],
+      onTap: count > 0 ? onTap : null,
+      child: AnimatedOpacity(
+        opacity: count > 0 ? 1.0 : 0.2,
+        duration: const Duration(milliseconds: 200),
+        child: Container(
+          decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.blueGrey[600]!), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 2)]),
+          child: Stack(
+            children: [
+              Center(child: Text(numeral, style: TextStyle(color: textColor.withOpacity(0.8), fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -2))),
+              Positioned(bottom: 4, right: 4, child: Container(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(2)), child: Text(count.toString(), style: const TextStyle(color: Colors.white70, fontSize: 7, fontWeight: FontWeight.bold)))),
+            ],
+          ),
         ),
       ),
     );
@@ -897,7 +964,6 @@ class BankToken extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     bool empty = count == 0;
-    // V27 FIX: Accurate Empty Token Opacity covering the gradient
     return GestureDetector(
       onTap: onTap,
       child: Opacity(
