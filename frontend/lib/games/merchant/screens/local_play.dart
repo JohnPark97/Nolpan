@@ -231,7 +231,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   }
 
   void _endTurnOrDiscard() {
-    // V20.2 PATCH: Clear selection buffer explicitly on EVERY turn conclusion to prevent ghost selections
     _draftSelection.clear(); 
     
     PlayerState player = _players[_turnIndex];
@@ -1108,7 +1107,7 @@ class MarketCardWidget extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(card.points > 0 ? card.points.toString() : "", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[700], height: 1)),
-                  // V20.2 Contrast Patch: Enhanced shadow and forced dark text on yellow
+                  // V20.3 Patch: Reverted to white icon, relying on shadow for contrast
                   Container(
                     width: 16, height: 16,
                     decoration: BoxDecoration(
@@ -1116,7 +1115,7 @@ class MarketCardWidget extends StatelessWidget {
                       shape: BoxShape.circle, 
                       boxShadow: const [BoxShadow(color: Colors.black26, offset: Offset(0, 1), blurRadius: 2)]
                     ),
-                    child: Center(child: _buildGemIcon(card.provides, 10, color: card.provides == GemType.yellow ? Colors.black87 : Colors.white)),
+                    child: Center(child: _buildGemIcon(card.provides, 10, color: Colors.white)),
                   )
                 ],
               ),
@@ -1124,7 +1123,6 @@ class MarketCardWidget extends StatelessWidget {
                 spacing: 2, runSpacing: 2,
                 children: card.costs.entries.map((entry) => Container(
                   width: 14, height: 14,
-                  // V20.2 Contrast Patch: Added drop shadow against white card face
                   decoration: BoxDecoration(
                     color: entry.key.color, 
                     shape: BoxShape.circle,
@@ -1133,11 +1131,12 @@ class MarketCardWidget extends StatelessWidget {
                   child: Center(
                     child: Text(
                       entry.value.toString(), 
-                      // V20.2 Contrast Patch: Darkened text strictly for yellow token costs
-                      style: TextStyle(
-                        color: entry.key == GemType.yellow ? Colors.black87 : Colors.white, 
+                      // V20.3 Patch: Reverted to white text, added soft drop shadow for readability
+                      style: const TextStyle(
+                        color: Colors.white, 
                         fontSize: 8, 
-                        fontWeight: FontWeight.w900
+                        fontWeight: FontWeight.w900,
+                        shadows: [Shadow(color: Colors.black45, blurRadius: 1.5, offset: Offset(0, 0.5))]
                       )
                     )
                   ),
