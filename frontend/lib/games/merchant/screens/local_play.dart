@@ -1,5 +1,146 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import '../../../core/ui/physics_button.dart';
+
+// --- 0. LOBBY SCREEN (FAST-ADD UX) ---
+
+class MerchantLobbyScreen extends StatefulWidget {
+  const MerchantLobbyScreen({super.key});
+
+  @override
+  State<MerchantLobbyScreen> createState() => _MerchantLobbyScreenState();
+}
+
+class _MerchantLobbyScreenState extends State<MerchantLobbyScreen> {
+  final List<String> _players = [];
+  final TextEditingController _nameCtrl = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    // V30 FIX: Auto-focus the input immediately on mount
+    Future.delayed(const Duration(milliseconds: 100), () => _focusNode.requestFocus());
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _addPlayer(String name) {
+    if (name.trim().isNotEmpty && _players.length < 4) {
+      setState(() { _players.add(name.trim()); });
+      _nameCtrl.clear();
+    }
+    // V30 FIX: Continuous Focus (Keep Keyboard Open)
+    _focusNode.requestFocus();
+  }
+
+  void _removePlayer(int index) {
+    setState(() { _players.removeAt(index); });
+  }
+
+  void _startGame() {
+    if (_players.length >= 2) {
+      Navigator.pushReplacement(context, MaterialPageRoute(
+        builder: (_) => GemCrafterScreen(playerNames: _players)
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF9F7F3),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 24),
+              const Center(child: Text("OFFLINE DRAFT", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 3))),
+              const SizedBox(height: 8),
+              const Center(child: Text("GEM CRAFTER", style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFF2A9D8F), letterSpacing: -1))),
+              const SizedBox(height: 48),
+              
+              TextField(
+                controller: _nameCtrl,
+                focusNode: _focusNode,
+                textInputAction: TextInputAction.done,
+                onSubmitted: _addPlayer,
+                maxLength: 12,
+                decoration: InputDecoration(
+                  counterText: "",
+                  hintText: _players.length < 4 ? "Enter Player Name..." : "Max 4 Players",
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  border: OutlineBinding(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.blueGrey[200]!)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF2A9D8F), width: 2)),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.add_circle, color: Color(0xFF2A9D8F)),
+                    onPressed: () => _addPlayer(_nameCtrl.text),
+                  )
+                ),
+                enabled: _players.length < 4,
+              ),
+              const SizedBox(height: 32),
+
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _players.length,
+                  itemBuilder: (ctx, i) {
+                    List<Color> aColors = [const Color(0xFF2A9D8F), const Color(0xFF8E44AD), const Color(0xFFE9C46A), const Color(0xFFE76F51)];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blueGrey[100]!), boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0, 2), blurRadius: 4)]),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(radius: 14, backgroundColor: aColors[i % aColors.length], child: Text(_players[i][0].toUpperCase(), style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 12),
+                              Text(_players[i], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2B2D42))),
+                            ],
+                          ),
+                          GestureDetector(
+                            onTap: () => _removePlayer(i),
+                            child: const Icon(Icons.close, color: Color(0xFFE76F51), size: 20),
+                          )
+                        ],
+                      ),
+                    );
+                  }
+                ),
+              ),
+
+              AnimatedOpacity(
+                opacity: _players.length >= 2 ? 1.0 : 0.4,
+                duration: const Duration(milliseconds: 200),
+                child: IgnorePointer(
+                  ignoring: _players.length < 2,
+                  child: PhysicsButton(
+                    text: "START MATCH",
+                    color: const Color(0xFF2A9D8F),
+                    shadowColor: const Color(0xFF1E7066),
+                    onTap: _startGame,
+                  ),
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 // --- 1. STRICT DATA MODELS ---
 
@@ -54,6 +195,7 @@ class NobleCard {
 class PlayerState {
   final String name;
   final String avatar;
+  final Color avatarColor;
   int score = 0;
   
   Map<GemType, int> engine = {
@@ -68,13 +210,13 @@ class PlayerState {
   
   List<MarketCard> reservedCards = [];
 
-  PlayerState(this.name, this.avatar);
+  PlayerState(this.name, this.avatar, this.avatarColor);
 }
 
 // --- MAIN SCREEN ---
 
 class GemCrafterScreen extends StatefulWidget {
-  final List<String>? playerNames; // V29 FIX: Accept dynamic names
+  final List<String>? playerNames; 
   const GemCrafterScreen({super.key, this.playerNames});
 
   @override
@@ -83,14 +225,10 @@ class GemCrafterScreen extends StatefulWidget {
 
 class _GemCrafterScreenState extends State<GemCrafterScreen> {
   
-  // STATE ENGINE
   late List<PlayerState> _players;
   int _turnIndex = 0;
 
-  Map<GemType, int> _bank = {
-    GemType.emerald: 5, GemType.amethyst: 5, GemType.yellow: 5,
-    GemType.ruby: 5, GemType.sapphire: 5, GemType.gold: 5
-  };
+  late Map<GemType, int> _bank;
 
   List<MarketCard> _market = [];
   List<MarketCard> _deckTier1 = [];
@@ -130,41 +268,41 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   }
 
   void _initializeGame() {
-    // V29 FIX: Dynamic names with fallback
     List<String> names = widget.playerNames ?? ["Player 1", "Player 2"];
-    _players = names.map((name) => PlayerState(name, name.isNotEmpty ? name[0].toUpperCase() : "?")).toList();
+    List<Color> aColors = [const Color(0xFF2A9D8F), const Color(0xFF8E44AD), const Color(0xFFE9C46A), const Color(0xFFE76F51)];
+    
+    _players = [];
+    for (int i = 0; i < names.length; i++) {
+       _players.add(PlayerState(names[i], names[i].isNotEmpty ? names[i][0].toUpperCase() : "?", aColors[i % aColors.length]));
+    }
 
-    // Tier 1 (40 Cards)
+    // V30 FIX: Dynamic Board Setup based on player count
+    int tokenCount = names.length == 4 ? 7 : (names.length == 3 ? 5 : 4);
+    _bank = {
+      GemType.emerald: tokenCount,
+      GemType.amethyst: tokenCount,
+      GemType.yellow: tokenCount,
+      GemType.ruby: tokenCount,
+      GemType.sapphire: tokenCount,
+      GemType.gold: 5, // Gold is always 5
+    };
+
     _deckTier1 = _generateDeck(1, [
-      {"points": 0, "cost": [1, 1, 1, 1]},
-      {"points": 0, "cost": [1, 2]},
-      {"points": 0, "cost": [2, 2]},
-      {"points": 0, "cost": [1, 2, 2]},
-      {"points": 0, "cost": [1, 1, 2, 1]},
-      {"points": 0, "cost": [3]},
-      {"points": 0, "cost": [2, 1]},
-      {"points": 1, "cost": [4]},
+      {"points": 0, "cost": [1, 1, 1, 1]}, {"points": 0, "cost": [1, 2]}, {"points": 0, "cost": [2, 2]},
+      {"points": 0, "cost": [1, 2, 2]}, {"points": 0, "cost": [1, 1, 2, 1]}, {"points": 0, "cost": [3]},
+      {"points": 0, "cost": [2, 1]}, {"points": 1, "cost": [4]},
     ]);
 
-    // Tier 2 (30 Cards)
     _deckTier2 = _generateDeck(2, [
-      {"points": 1, "cost": [3, 2, 2]},
-      {"points": 1, "cost": [3, 3]},
-      {"points": 2, "cost": [5]},
-      {"points": 2, "cost": [5, 3]},
-      {"points": 2, "cost": [4, 2, 1]},
-      {"points": 3, "cost": [6]},
+      {"points": 1, "cost": [3, 2, 2]}, {"points": 1, "cost": [3, 3]}, {"points": 2, "cost": [5]},
+      {"points": 2, "cost": [5, 3]}, {"points": 2, "cost": [4, 2, 1]}, {"points": 3, "cost": [6]},
     ]);
 
-    // Tier 3 (20 Cards)
     _deckTier3 = _generateDeck(3, [
-      {"points": 3, "cost": [3, 3, 3, 5]},
-      {"points": 4, "cost": [7]},
-      {"points": 4, "cost": [6, 3, 3]},
-      {"points": 5, "cost": [7, 3]},
+      {"points": 3, "cost": [3, 3, 3, 5]}, {"points": 4, "cost": [7]},
+      {"points": 4, "cost": [6, 3, 3]}, {"points": 5, "cost": [7, 3]},
     ]);
 
-    // 10 Exact Historical Nobles
     List<NobleCard> allNobles = [
       NobleCard(id: 1, points: 3, requirements: {GemType.yellow: 3, GemType.sapphire: 3, GemType.amethyst: 3}),
       NobleCard(id: 2, points: 3, requirements: {GemType.yellow: 3, GemType.ruby: 3, GemType.amethyst: 3}),
@@ -185,11 +323,10 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     _deckTier2.shuffle();
     _deckTier3.shuffle();
 
-    // V29 FIX: Correctly map Tier 1 (cheapest) to the bottom, Tier 3 (expensive) to the top.
     _market = [
-      _drawCard(1), _drawCard(1), _drawCard(1), _drawCard(1), // 0-3 (Tier 1 - Bottom)
-      _drawCard(2), _drawCard(2), _drawCard(2), _drawCard(2), // 4-7 (Tier 2 - Middle)
-      _drawCard(3), _drawCard(3), _drawCard(3), _drawCard(3), // 8-11 (Tier 3 - Top)
+      _drawCard(1), _drawCard(1), _drawCard(1), _drawCard(1), 
+      _drawCard(2), _drawCard(2), _drawCard(2), _drawCard(2), 
+      _drawCard(3), _drawCard(3), _drawCard(3), _drawCard(3), 
     ];
   }
 
@@ -213,7 +350,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   void _endTurnOrDiscard() {
     PlayerState player = _players[_turnIndex];
     
-    // Check Nobles
     NobleCard? claimedNoble;
     for (var noble in _availableNobles) {
       bool meetsReqs = true;
@@ -222,7 +358,7 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
       });
       if (meetsReqs) {
         claimedNoble = noble;
-        break; // Max 1 per turn
+        break; 
       }
     }
 
@@ -520,8 +656,8 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
             crossAxisAlignment: CrossAxisAlignment.start, 
             children: opponents.map((opp) => Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(right: 6.0),
-                child: OpponentCard(player: opp),
+                padding: const EdgeInsets.only(right: 4.0),
+                child: OpponentCard(player: opp, opponentCount: opponents.length),
               )
             )).toList(),
           )
@@ -762,13 +898,21 @@ Widget _buildGemIcon(GemType gem, double size, {Color? color}) {
 
 class OpponentCard extends StatelessWidget {
   final PlayerState player;
+  final int opponentCount; // V30 FIX: Adaptive awareness
 
-  const OpponentCard({super.key, required this.player});
+  const OpponentCard({super.key, required this.player, required this.opponentCount});
 
   @override
   Widget build(BuildContext context) {
+    bool compact = opponentCount >= 3;
+    double avatarRadius = compact ? 8 : 10;
+    double nameSize = compact ? 10 : 12;
+    double scoreSize = compact ? 12 : 14;
+    double paddingH = compact ? 6 : 10;
+    double paddingV = compact ? 6 : 8;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: paddingH, vertical: paddingV),
       decoration: BoxDecoration(
         color: Colors.white, 
         borderRadius: BorderRadius.circular(10), 
@@ -782,55 +926,55 @@ class OpponentCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  CircleAvatar(radius: 10, backgroundColor: const Color(0xFF2A9D8F), child: Text(player.avatar, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))),
-                  const SizedBox(width: 6),
-                  Text(player.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
-                ],
+              Expanded(
+                child: Row(
+                  children: [
+                    CircleAvatar(radius: avatarRadius, backgroundColor: player.avatarColor, child: Text(player.avatar, style: TextStyle(fontSize: avatarRadius, color: Colors.white, fontWeight: FontWeight.bold))),
+                    const SizedBox(width: 4),
+                    Expanded(child: Text(player.name, style: TextStyle(fontSize: nameSize, fontWeight: FontWeight.bold, letterSpacing: -0.5), overflow: TextOverflow.ellipsis)),
+                  ],
+                ),
               ),
-              Text(player.score.toString(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: const Color(0xFF2A9D8F))),
+              Text(player.score.toString(), style: TextStyle(fontSize: scoreSize, fontWeight: FontWeight.w900, color: const Color(0xFF2A9D8F))),
             ],
           ),
           const SizedBox(height: 8),
-          // V29 FIX: Strict 6-column alignment layout
-          Row(
-            children: GemType.values.map((g) {
-              if (g == GemType.gold) return const Expanded(child: SizedBox());
-              int c = player.engine[g] ?? 0;
-              return Expanded(
-                child: Center(
-                  child: Container(
-                    width: 14, height: 14,
-                    decoration: BoxDecoration(
-                      color: c > 0 ? g.color : g.color.withOpacity(0.2), 
-                      borderRadius: BorderRadius.circular(3),
-                      border: c > 0 ? Border.all(color: Colors.black12) : null
-                    ),
-                    child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
+          // Strict 6-column alignment layout (Guaranteed not to wrap due to FittedBox)
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              children: GemType.values.map((g) {
+                if (g == GemType.gold) return const SizedBox(width: 14);
+                int c = player.engine[g] ?? 0;
+                return Container(
+                  width: 14, height: 14, margin: const EdgeInsets.only(right: 4),
+                  decoration: BoxDecoration(
+                    color: c > 0 ? g.color : g.color.withOpacity(0.2), 
+                    borderRadius: BorderRadius.circular(3),
+                    border: c > 0 ? Border.all(color: Colors.black12) : null
                   ),
-                ),
-              );
-            }).toList(),
+                  child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
+                );
+              }).toList(),
+            ),
           ),
           const SizedBox(height: 4),
-          Row(
-            children: GemType.values.map((g) {
-              int c = player.wallet[g] ?? 0;
-              return Expanded(
-                child: Center(
-                  child: Container(
-                    width: 14, height: 14,
-                    decoration: BoxDecoration(
-                      color: g.gradient == null ? g.color.withOpacity(c > 0 ? 1.0 : 0.15) : null,
-                      gradient: g.gradient != null && c > 0 ? g.gradient : null,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              children: GemType.values.map((g) {
+                int c = player.wallet[g] ?? 0;
+                return Container(
+                  width: 14, height: 14, margin: const EdgeInsets.only(right: 4),
+                  decoration: BoxDecoration(
+                    color: g.gradient == null ? g.color.withOpacity(c > 0 ? 1.0 : 0.15) : null,
+                    gradient: g.gradient != null && c > 0 ? g.gradient : null,
+                    shape: BoxShape.circle,
                   ),
-                ),
-              );
-            }).toList(),
+                  child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
+                );
+              }).toList(),
+            ),
           ),
         ],
       ),
@@ -1004,7 +1148,6 @@ class EngineBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     bool active = count > 0;
-    // V29 FIX: Engine blocks retain native color at zero count for UX visibility
     return Container(
       height: 40,
       decoration: BoxDecoration(
