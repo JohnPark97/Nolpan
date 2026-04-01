@@ -45,13 +45,53 @@ class _GameScreenState extends State<GameScreen> {
   void initState() {
     super.initState();
     _gameState = widget.initialState;
-    _sub = socketService.stream.listen((msg) {
+    
+    _sub = socketService.stream.listen((msg) async {
       if (msg['type'] == 'GAME_UPDATE' || msg['type'] == 'GAME_OVER' || msg['type'] == 'GAME_STARTED') {
-        if (mounted) setState(() { 
-          _gameState = msg['payload']; 
-          _showShatter = false; 
-          _isReviewingBoard = false; 
-        });
+        Map<String, dynamic> newState = msg['payload'];
+
+        // --- V20.5: NETWORK ANIMATION DIFFING ---
+        if (mounted && _gameState.isNotEmpty && msg['type'] != 'GAME_STARTED') {
+          String myName = socketService.playerName ?? "";
+          Map<String, dynamic> oldBoard = _gameState['boards'][myName] ?? {};
+          Map<String, dynamic> newBoard = newState['boards'][myName] ?? {};
+          
+          bool didScore = false;
+          
+          List oldWall = oldBoard['wall'] ?? [];
+          List newWall = newBoard['wall'] ?? [];
+          
+          if (oldWall.isNotEmpty && newWall.isNotEmpty) {
+            for (int r = 0; r < 5; r++) {
+              for (int c = 0; c < 5; c++) {
+                if (oldWall.length > r && oldWall[r].length > c && 
+                    newWall.length > r && newWall[r].length > c) {
+                  // Detect if the server scored a new tile
+                  if (oldWall[r][c] == "" && newWall[r][c] != "") {
+                    didScore = true;
+                    _playScoringFlight(r, c, newWall[r][c]);
+                  }
+                }
+              }
+            }
+          }
+
+          if (didScore) {
+            // Trigger the shatter UI on the OLD state
+            setState(() => _showShatter = true);
+            HapticFeedback.heavyImpact();
+            // Block the state update for 600ms so the physical flight can finish rendering
+            await Future.delayed(const Duration(milliseconds: 600));
+          }
+        }
+
+        if (mounted) {
+          setState(() { 
+            _gameState = newState; 
+            _showShatter = false; 
+            _isReviewingBoard = false; 
+          });
+        }
       } else if (msg['type'] == 'RETURN_TO_LOBBY') {
         if (mounted) Navigator.pushReplacementNamed(context, '/');
       }
@@ -75,7 +115,6 @@ class _GameScreenState extends State<GameScreen> {
     GlobalKey sourceKey = kIdx == -1 ? centerKey : factoryKeys[kIdx];
     GlobalKey destKey = targetRow == -1 ? floorKey : patternRowKeys[targetRow];
     
-    // V39 FIX: Added try/catch safety net so UI animation glitches never kill network payload
     try {
       _playDraftingFlight(sourceKey, destKey, cColor, cCount);
     } catch (e) {
@@ -99,6 +138,35 @@ class _GameScreenState extends State<GameScreen> {
       'color': cColor,
       'target_row': targetRow
     });
+  }
+
+  // --- V20.5: Added Missing Online Scoring Flight Animation ---
+  void _playScoringFlight(int r, int c, String color) {
+    final RenderBox? startBox = patternRowKeys[r].currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? endBox = wallKeys[r][c].currentContext?.findRenderObject() as RenderBox?;
+    if (startBox == null || endBox == null) return;
+
+    final Offset startCenter = startBox.localToGlobal(Offset(startBox.size.width / 2, startBox.size.height / 2));
+    final Offset endCenter = endBox.localToGlobal(Offset(endBox.size.width / 2, endBox.size.height / 2));
+
+    OverlayEntry? entry;
+    entry = OverlayEntry(
+      builder: (BuildContext overlayCtx) => TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeOutBack,
+        builder: (BuildContext tweenCtx, double val, Widget? child) {
+          double dx = startCenter.dx + (endCenter.dx - startCenter.dx) * val - 12.0;
+          double dy = startCenter.dy + (endCenter.dy - startCenter.dy) * val - 12.0;
+          return Positioned(
+            left: dx, top: dy, 
+            child: _buildTile(color, size: 24)
+          );
+        },
+        onEnd: () => entry?.remove()
+      )
+    );
+    Overlay.of(context)?.insert(entry!);
   }
 
   void _playDraftingFlight(GlobalKey startKey, GlobalKey endKey, String color, int count) {
@@ -613,6 +681,12 @@ class _GameScreenState extends State<GameScreen> {
                                             else if (slotIdx >= ghostStart && slotIdx < emptyCount) tileW = _buildTile(heldColor!, size: 24, isGhost: true);
                                             else tileW = _buildTile(rowColor, size: 24);
 
+                                            if (_showShatter) {
+                                              tileW = AnimatedScale(
+                                                scale: 0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInBack, 
+                                                child: AnimatedOpacity(opacity: 0.0, duration: const Duration(milliseconds: 400), child: tileW)
+                                              );
+                                            }
                                             return SizedBox(width: 27, height: 27, child: Center(child: tileW));
                                           }),
                                         ),
@@ -659,12 +733,21 @@ class _GameScreenState extends State<GameScreen> {
                               children: List.generate(7, (i) {
                                 String t = i < floor.length ? floor[i] : "";
                                 if (hoveredRow == -1 && heldColor != null && heldCount != null && i >= floor.length && i < floor.length + heldCount!) t = heldColor!;
+                                
+                                Widget tileW = _buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor);
+                                if (_showShatter && t != "") {
+                                  tileW = AnimatedScale(
+                                    scale: 0.0, duration: const Duration(milliseconds: 400), curve: Curves.easeInBack, 
+                                    child: AnimatedOpacity(opacity: 0.0, duration: const Duration(milliseconds: 400), child: tileW)
+                                  );
+                                }
+                                
                                 return Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 4), 
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min, 
                                     children: [
-                                      SizedBox(width: 27, height: 27, child: Center(child: _buildTile(t, size: 24, empty: t == "", isGhost: hoveredRow == -1 && t == heldColor))), 
+                                      SizedBox(width: 27, height: 27, child: Center(child: tileW)), 
                                       const SizedBox(height: 4), 
                                       Text(shatterPenalties[i], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: tTerra))
                                     ]
