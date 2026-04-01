@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'dart:math' as math;
 import '../../../core/ui/physics_button.dart';
 
@@ -69,6 +70,7 @@ class PlayerState {
   };
   
   List<MarketCard> reservedCards = [];
+  List<NobleCard> earnedNobles = []; // V20.1: Track earned nobles
 
   PlayerState(this.name, this.avatar, this.avatarColor);
 }
@@ -85,6 +87,8 @@ class GemCrafterScreen extends StatefulWidget {
 
 class _GemCrafterScreenState extends State<GemCrafterScreen> {
   bool _isInitialized = false;
+  bool _isFinalRound = false;
+  bool _isGameOver = false;
 
   late List<PlayerState> _players;
   int _turnIndex = 0;
@@ -101,19 +105,15 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   bool _isDiscarding = false;
   int _globalCardId = 1;
 
-  // V35 FIX: Intercept Route Arguments natively so Global Lobby syncs seamlessly
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_isInitialized) {
       List<String>? finalNames;
 
-      // 1. Check direct constructor (MaterialPageRoute)
       if (widget.playerNames != null && widget.playerNames!.isNotEmpty) {
         finalNames = widget.playerNames;
-      } 
-      // 2. Check Route Settings (Named Routing)
-      else {
+      } else {
         final args = ModalRoute.of(context)?.settings.arguments;
         if (args is List) {
           finalNames = args.map((e) => e.toString()).toList();
@@ -122,7 +122,6 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
         }
       }
 
-      // 3. Ultimate Fallback Protection
       if (finalNames == null || finalNames.isEmpty) {
         finalNames = ["Player 1", "Player 2"];
       }
@@ -249,6 +248,7 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     if (claimedNoble != null) {
       setState(() {
         player.score += claimedNoble!.points;
+        player.earnedNobles.add(claimedNoble!);
         _availableNobles.remove(claimedNoble);
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -258,6 +258,11 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
       ));
     }
 
+    // Trigger Final Round if 15 points reached
+    if (player.score >= 15) {
+      _isFinalRound = true;
+    }
+
     int totalTokens = player.wallet.values.fold(0, (sum, val) => sum + val);
     
     setState(() {
@@ -265,7 +270,12 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
         _isDiscarding = true;
       } else {
         _isDiscarding = false;
-        _turnIndex = (_turnIndex + 1) % _players.length;
+        // If it's the final round AND the last player just finished their turn
+        if (_isFinalRound && _turnIndex == _players.length - 1) {
+          _isGameOver = true;
+        } else {
+          _turnIndex = (_turnIndex + 1) % _players.length;
+        }
       }
     });
   }
@@ -479,9 +489,69 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
 
   // --- UI RENDER ---
 
+  Widget _buildVictoryModal() {
+    List<PlayerState> ranked = List.from(_players);
+    ranked.sort((a, b) {
+      int cmp = b.score.compareTo(a.score);
+      if (cmp != 0) return cmp;
+      int aCards = a.engine.values.fold(0, (s,v)=>s+v);
+      int bCards = b.engine.values.fold(0, (s,v)=>s+v);
+      return aCards.compareTo(bCards);
+    });
+
+    return Positioned.fill(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          color: Colors.black54,
+          child: Center(
+            child: Container(
+              margin: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20)]
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.emoji_events, size: 64, color: Color(0xFFD4AF37)),
+                  const SizedBox(height: 16),
+                  const Text("MATCH COMPLETE", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2, color: Color(0xFF2B2D42))),
+                  const SizedBox(height: 32),
+                  ...ranked.map((p) {
+                    bool isWinner = p == ranked.first;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(radius: 12, backgroundColor: p.avatarColor, child: Text(p.avatar, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 8),
+                              Text(p.name, style: TextStyle(fontSize: 14, fontWeight: isWinner ? FontWeight.w900 : FontWeight.bold, color: const Color(0xFF2B2D42))),
+                            ]
+                          ),
+                          Text(p.score.toString(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: isWinner ? const Color(0xFF2A9D8F) : const Color(0xFF2B2D42))),
+                        ]
+                      )
+                    );
+                  }).toList(),
+                  const SizedBox(height: 48),
+                  PhysicsButton(text: "EXIT TO LOBBY", color: const Color(0xFFE76F51), shadowColor: const Color(0xFFB3563F), onTap: () => Navigator.pop(context)),
+                ]
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Safety check just in case build runs before didChangeDependencies completes
     if (!_isInitialized) return const Scaffold(backgroundColor: Color(0xFFF9F7F3));
 
     PlayerState currentPlayer = _players[_turnIndex];
@@ -490,24 +560,29 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9F7F3),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Stack(
           children: [
-            _buildSky(opponents, currentPlayer.name),
-            IgnorePointer(
-              ignoring: _isDiscarding,
-              child: Opacity(
-                opacity: _isDiscarding ? 0.5 : 1.0,
-                child: Column(
-                  children: [
-                    _buildNobles(),
-                    SizedBox(height: 240, child: _buildMarket(currentPlayer)),
-                    _buildBank(),
-                  ],
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildSky(opponents, currentPlayer.name),
+                IgnorePointer(
+                  ignoring: _isDiscarding,
+                  child: Opacity(
+                    opacity: _isDiscarding ? 0.5 : 1.0,
+                    child: Column(
+                      children: [
+                        _buildNobles(),
+                        SizedBox(height: 240, child: _buildMarket(currentPlayer)),
+                        _buildBank(),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                Expanded(child: _buildDashboard(currentPlayer)),
+              ],
             ),
-            Expanded(child: _buildDashboard(currentPlayer)),
+            if (_isGameOver) _buildVictoryModal(),
           ],
         ),
       ),
@@ -515,6 +590,9 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   }
 
   Widget _buildSky(List<PlayerState> opponents, String currName) {
+    String statusText = _isDiscarding ? "DISCARD TO 10 TOKENS" : (_isFinalRound ? "FINAL ROUND: ${currName.toUpperCase()}" : "CURRENT TURN: ${currName.toUpperCase()}");
+    Color statusColor = _isDiscarding ? const Color(0xFFE76F51) : (_isFinalRound ? const Color(0xFFE9C46A) : const Color(0xFF2A9D8F));
+
     return Container(
       padding: const EdgeInsets.only(top: 8, left: 12, right: 12, bottom: 4),
       child: Column(
@@ -526,12 +604,12 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
                 duration: const Duration(milliseconds: 300),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: _isDiscarding ? const Color(0xFFE76F51) : const Color(0xFF2A9D8F), 
+                  color: statusColor, 
                   borderRadius: BorderRadius.circular(12), 
                   boxShadow: const [BoxShadow(color: Colors.black12, offset: Offset(0,1), blurRadius: 2)]
                 ),
                 child: Text(
-                  _isDiscarding ? "DISCARD TO 10 TOKENS" : "CURRENT TURN: ${currName.toUpperCase()}", 
+                  statusText, 
                   style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)
                 ),
               ),
@@ -679,26 +757,56 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
                 ],
               ),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("RESERVED", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey[400], letterSpacing: 1.5)),
-                  const SizedBox(width: 6),
-                  ...List.generate(3, (i) {
-                    bool filled = i < player.reservedCards.length;
-                    return GestureDetector(
-                      onTap: () {
-                        if (filled) _showReservedCardModal(player.reservedCards[i]);
-                      },
-                      child: Container(
-                        width: 20, height: 28, margin: const EdgeInsets.only(left: 4),
-                        decoration: BoxDecoration(
-                          color: filled ? player.reservedCards[i].provides.color : Colors.transparent,
-                          borderRadius: BorderRadius.circular(4), 
-                          border: Border.all(color: filled ? Colors.black26 : Colors.blueGrey[300]!)
-                        )
-                      ),
-                    );
-                  })
-                ],
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text("NOBLES EARNED", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.amber[600], letterSpacing: 1.0)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: List.generate(2, (i) {
+                          bool earned = i < player.earnedNobles.length;
+                          return Container(
+                            width: 20, height: 26, margin: const EdgeInsets.only(left: 4),
+                            decoration: BoxDecoration(
+                              color: earned ? const Color(0xFFFDFBF7) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: earned ? const Color(0xFFD4AF37) : Colors.blueGrey[200]!)
+                            ),
+                            child: earned ? const Icon(Icons.workspace_premium, size: 14, color: Color(0xFFD4AF37)) : null
+                          );
+                        })
+                      )
+                    ]
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text("RESERVED CARDS", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.blueGrey[400], letterSpacing: 1.0)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: List.generate(3, (i) {
+                          bool filled = i < player.reservedCards.length;
+                          return GestureDetector(
+                            onTap: () {
+                              if (filled) _showReservedCardModal(player.reservedCards[i]);
+                            },
+                            child: Container(
+                              width: 18, height: 26, margin: const EdgeInsets.only(left: 4),
+                              decoration: BoxDecoration(
+                                color: filled ? player.reservedCards[i].provides.color : Colors.transparent,
+                                borderRadius: BorderRadius.circular(4), 
+                                border: Border.all(color: filled ? Colors.black26 : Colors.blueGrey[300]!)
+                              )
+                            ),
+                          );
+                        })
+                      )
+                    ]
+                  )
+                ]
               )
             ],
           ),
@@ -822,7 +930,16 @@ class OpponentCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Text(player.score.toString(), style: TextStyle(fontSize: scoreSize, fontWeight: FontWeight.w900, color: const Color(0xFF2A9D8F))),
+              Row(
+                children: [
+                  if (player.earnedNobles.isNotEmpty) ...[
+                    Icon(Icons.workspace_premium, size: scoreSize * 0.9, color: const Color(0xFFD4AF37)),
+                    Text(player.earnedNobles.length.toString(), style: TextStyle(fontSize: scoreSize * 0.8, fontWeight: FontWeight.w900, color: const Color(0xFFD4AF37))),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(player.score.toString(), style: TextStyle(fontSize: scoreSize, fontWeight: FontWeight.w900, color: const Color(0xFF2A9D8F))),
+                ],
+              )
             ],
           ),
           const SizedBox(height: 8),
