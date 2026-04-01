@@ -114,7 +114,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			if room, exists := rooms[p.Code]; exists {
 				currentRoomCode = p.Code; currentName = p.Name
 				
-                // V32 FIX: Prevent duplicate player entries blocking turn logic
                 inPlayers := false
                 for _, name := range room.Players {
                     if name == p.Name { inPlayers = true; break }
@@ -291,10 +290,17 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					for i := 0; i < pickedCount; i++ { addToFloor(p.Color) }
 				}
 
+				// V39 FIX: Indestructible logic that scans forward for a unique name.
+                // Guarantees the turn advances even if Ghost Duplicates polluted the array.
 				for i, name := range room.Players {
 					if name == p.Player {
-						nextIdx := (i + 1) % len(room.Players)
-						room.State.TurnPlayer = room.Players[nextIdx]
+						for j := 1; j <= len(room.Players); j++ {
+							nextIdx := (i + j) % len(room.Players)
+							if room.Players[nextIdx] != p.Player {
+								room.State.TurnPlayer = room.Players[nextIdx]
+								break
+							}
+						}
 						break
 					}
 				}

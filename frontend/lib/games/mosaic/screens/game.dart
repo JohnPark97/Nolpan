@@ -75,7 +75,12 @@ class _GameScreenState extends State<GameScreen> {
     GlobalKey sourceKey = kIdx == -1 ? centerKey : factoryKeys[kIdx];
     GlobalKey destKey = targetRow == -1 ? floorKey : patternRowKeys[targetRow];
     
-    _playDraftingFlight(sourceKey, destKey, cColor, cCount);
+    // V39 FIX: Added try/catch safety net so UI animation glitches never kill network payload
+    try {
+      _playDraftingFlight(sourceKey, destKey, cColor, cCount);
+    } catch (e) {
+      debugPrint("Animation flight bypassed to preserve turn state.");
+    }
 
     setState(() { 
       heldColor = null; 
@@ -202,7 +207,9 @@ class _GameScreenState extends State<GameScreen> {
           for (int c = 0; c < 5; c++) { 
             if (wall.length > r && wall[r].length > c) {
               String t = wall[r][c].toLowerCase();
-              if (t == color || (color == 'amethyst' && (t == 'purple' || t == 'white'))) count++;
+              if (t == color || (color == 'amethyst' && (t == 'purple' || t == 'white'))) {
+                count++;
+              }
             }
           }
         }
