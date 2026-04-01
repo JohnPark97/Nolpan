@@ -800,7 +800,8 @@ class _LocalPlayScreenState extends State<LocalPlayScreen> {
                     if (_selectedGame == 'mosaic') {
                       _startLocalGame(); 
                     } else {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const merchant.GemCrafterScreen()));
+                      // V40 PATCH: Pass the local players explicitly!
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => merchant.GemCrafterScreen(playerNames: _localPlayers)));
                     }
                   } 
                 }
