@@ -101,26 +101,30 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     _initializeGame();
   }
 
+  // V27 FIX: Accurate Splendor Costs
   MarketCard _generateCard(int tier, int id) {
     final rand = math.Random(id);
-    GemType provides = GemType.values[rand.nextInt(5)];
+    GemType provides = GemType.values[rand.nextInt(5)]; // 0-4 (No Gold)
     int points = 0;
     Map<GemType, int> costs = {};
     int costTotal = 0;
     
     if (tier == 1) {
       points = rand.nextDouble() > 0.8 ? 1 : 0;
-      costTotal = rand.nextInt(3) + 3; // 3 to 5 gems
+      List<int> validCosts = [3, 4, 5];
+      costTotal = validCosts[rand.nextInt(validCosts.length)];
     } else if (tier == 2) {
       points = rand.nextInt(3) + 1; // 1 to 3 pts
-      costTotal = rand.nextInt(4) + 5; // 5 to 8 gems
+      List<int> validCosts = [5, 6, 7, 8];
+      costTotal = validCosts[rand.nextInt(validCosts.length)];
     } else {
       points = rand.nextInt(3) + 3; // 3 to 5 pts
-      costTotal = rand.nextInt(5) + 7; // 7 to 11 gems
+      List<int> validCosts = [7, 10, 12, 14];
+      costTotal = validCosts[rand.nextInt(validCosts.length)];
     }
 
     while (costs.values.fold(0, (a, b) => a + b) < costTotal) {
-      GemType c = GemType.values[rand.nextInt(5)];
+      GemType c = GemType.values[rand.nextInt(5)]; // 0-4 (No Gold)
       if (c == provides && rand.nextBool()) continue; 
       costs[c] = (costs[c] ?? 0) + 1;
     }
@@ -507,28 +511,11 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   }
 
   Widget _buildBank() {
+    bool hasSelection = _draftSelection.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Column(
         children: [
-          if (_draftSelection.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  GestureDetector(
-                    onTap: _cancelDraft,
-                    child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), decoration: BoxDecoration(color: Colors.blueGrey[100], borderRadius: BorderRadius.circular(12)), child: const Text("CANCEL", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey))),
-                  ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: _commitDraft,
-                    child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF2A9D8F), borderRadius: BorderRadius.circular(12)), child: const Text("CONFIRM", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
-                  )
-                ],
-              ),
-            ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: GemType.values.map((gem) {
@@ -544,6 +531,36 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
               );
             }).toList(),
           ),
+          const SizedBox(height: 12),
+          // V27 FIX: Persistent UI to stop layout shifts
+          Opacity(
+            opacity: hasSelection ? 1.0 : 0.4,
+            child: IgnorePointer(
+              ignoring: !hasSelection,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: _cancelDraft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), 
+                      decoration: BoxDecoration(color: Colors.blueGrey[100], borderRadius: BorderRadius.circular(16)), 
+                      child: const Text("CANCEL", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueGrey))
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  GestureDetector(
+                    onTap: _commitDraft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), 
+                      decoration: BoxDecoration(color: const Color(0xFF2A9D8F), borderRadius: BorderRadius.circular(16)), 
+                      child: const Text("CONFIRM", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))
+                    ),
+                  )
+                ],
+              ),
+            ),
+          )
         ],
       ),
     );
@@ -668,7 +685,11 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
 
 // --- WIDGET COMPONENTS ---
 
+// V27 FIX: Accurate Gold Token representation
 Widget _buildGemIcon(GemType gem, double size, {Color? color}) {
+  if (gem == GemType.gold) {
+    return Text('W', style: TextStyle(fontSize: size * 1.1, fontWeight: FontWeight.w900, color: color ?? Colors.white, height: 1.1));
+  }
   return Icon(gem.iconData, size: size * 1.2, color: color ?? Colors.white);
 }
 
@@ -712,9 +733,14 @@ class OpponentCard extends StatelessWidget {
               children: [
                 ...[GemType.emerald, GemType.amethyst, GemType.yellow, GemType.ruby, GemType.sapphire].map((g) {
                   int c = player.engine[g] ?? 0;
+                  // V27 FIX: Vibrant Opponent Engine Contrast
                   return Container(
                     width: 14, height: 14, margin: const EdgeInsets.only(right: 4),
-                    decoration: BoxDecoration(color: g.color.withOpacity(c > 0 ? 1.0 : 0.15), borderRadius: BorderRadius.circular(3)),
+                    decoration: BoxDecoration(
+                      color: c > 0 ? g.color : g.color.withOpacity(0.2), 
+                      borderRadius: BorderRadius.circular(3),
+                      border: c > 0 ? Border.all(color: Colors.black12) : null
+                    ),
                     child: Center(child: Text(c > 0 ? c.toString() : "", style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
                   );
                 }),
@@ -871,32 +897,32 @@ class BankToken extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     bool empty = count == 0;
-    double tokenOpacity = empty ? 0.3 : 1.0;
+    // V27 FIX: Accurate Empty Token Opacity covering the gradient
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color: gem.gradient == null ? gem.color.withOpacity(tokenOpacity) : null, 
-              gradient: gem.gradient != null ? LinearGradient(
-                colors: (gem.gradient as LinearGradient).colors.map((c) => c.withOpacity(tokenOpacity)).toList(),
-                begin: Alignment.topLeft, end: Alignment.bottomRight
-              ) : null,
-              shape: BoxShape.circle, 
-              border: Border.all(color: selectedCount > 0 ? const Color(0xFFE76F51) : Colors.white.withOpacity(tokenOpacity), width: selectedCount > 0 ? 3 : 2), 
-              boxShadow: empty ? [] : const [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]
+      child: Opacity(
+        opacity: empty ? 0.3 : 1.0,
+        child: Column(
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: gem.gradient == null ? gem.color : null, 
+                gradient: gem.gradient,
+                shape: BoxShape.circle, 
+                border: Border.all(color: selectedCount > 0 ? const Color(0xFFE76F51) : Colors.white, width: selectedCount > 0 ? 3 : 2), 
+                boxShadow: empty ? [] : const [BoxShadow(color: Colors.black26, offset: Offset(0, 2), blurRadius: 4)]
+              ),
+              child: Center(child: _buildGemIcon(gem, 18, color: Colors.white)),
             ),
-            child: Center(child: _buildGemIcon(gem, 18, color: Colors.white.withOpacity(tokenOpacity))),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: Colors.blueGrey[200], borderRadius: BorderRadius.circular(12)),
-            child: Text(count.toString(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[600], height: 1)),
-          )
-        ],
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: Colors.blueGrey[200], borderRadius: BorderRadius.circular(12)),
+              child: Text(count.toString(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.blueGrey[600], height: 1)),
+            )
+          ],
+        ),
       ),
     );
   }
