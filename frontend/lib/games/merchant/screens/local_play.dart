@@ -84,7 +84,8 @@ class GemCrafterScreen extends StatefulWidget {
 }
 
 class _GemCrafterScreenState extends State<GemCrafterScreen> {
-  
+  bool _isInitialized = false;
+
   late List<PlayerState> _players;
   int _turnIndex = 0;
 
@@ -100,10 +101,35 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
   bool _isDiscarding = false;
   int _globalCardId = 1;
 
+  // V35 FIX: Intercept Route Arguments natively so Global Lobby syncs seamlessly
   @override
-  void initState() {
-    super.initState();
-    _initializeGame();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isInitialized) {
+      List<String>? finalNames;
+
+      // 1. Check direct constructor (MaterialPageRoute)
+      if (widget.playerNames != null && widget.playerNames!.isNotEmpty) {
+        finalNames = widget.playerNames;
+      } 
+      // 2. Check Route Settings (Named Routing)
+      else {
+        final args = ModalRoute.of(context)?.settings.arguments;
+        if (args is List) {
+          finalNames = args.map((e) => e.toString()).toList();
+        } else if (args is Map && args['players'] is List) {
+          finalNames = (args['players'] as List).map((e) => e.toString()).toList();
+        }
+      }
+
+      // 3. Ultimate Fallback Protection
+      if (finalNames == null || finalNames.isEmpty) {
+        finalNames = ["Player 1", "Player 2"];
+      }
+
+      _initializeGame(finalNames);
+      _isInitialized = true;
+    }
   }
 
   List<MarketCard> _generateDeck(int tier, List<Map<String, dynamic>> patterns) {
@@ -127,8 +153,7 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
     return deck;
   }
 
-  void _initializeGame() {
-    List<String> names = widget.playerNames ?? ["Player 1", "Player 2"];
+  void _initializeGame(List<String> names) {
     List<Color> aColors = [const Color(0xFF2A9D8F), const Color(0xFF8E44AD), const Color(0xFFE9C46A), const Color(0xFFE76F51)];
     
     _players = [];
@@ -456,6 +481,9 @@ class _GemCrafterScreenState extends State<GemCrafterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Safety check just in case build runs before didChangeDependencies completes
+    if (!_isInitialized) return const Scaffold(backgroundColor: Color(0xFFF9F7F3));
+
     PlayerState currentPlayer = _players[_turnIndex];
     List<PlayerState> opponents = _players.where((p) => p != currentPlayer).toList();
 
